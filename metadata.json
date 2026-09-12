@@ -1,0 +1,6 @@
+{
+  "name": "ShopLink Kenya",
+  "description": "Kenya's premier SaaS platform for small businesses to launch online stores, manage inventory, and accept M-Pesa payments via Hashback.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
