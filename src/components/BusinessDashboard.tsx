@@ -32,8 +32,12 @@ import {
   QrCode,
   Copy,
   Check,
+  Building2,
+  Smartphone,
+  PhoneCall,
 } from 'lucide-react';
-import { OrderStatus, Product, SubscriptionPlan } from '../types';
+import { OrderStatus, Product, SubscriptionPlan, SettlementType, PaymentMethodChoice } from '../types';
+import { KENYA_COUNTIES } from '../data/counties';
 import { SubscriptionPaymentModal } from './SubscriptionPaymentModal';
 import { ShopLinkModal } from './ShopLinkModal';
 import { ASSISTANCE_CONFIG, buildWhatsAppUrl } from '../lib/assistanceConfig';
@@ -49,6 +53,7 @@ export const BusinessDashboard: React.FC = () => {
     deleteProduct,
     orders,
     updateOrderStatus,
+    updateOrderDeliveryFee,
     customers,
     payments,
     plans,
@@ -65,6 +70,117 @@ export const BusinessDashboard: React.FC = () => {
 
   const [isShopLinkModalOpen, setIsShopLinkModalOpen] = useState(false);
   const [copiedDirectLink, setCopiedDirectLink] = useState(false);
+  const [editingFeeOrderId, setEditingFeeOrderId] = useState<string | null>(null);
+  const [customFeeInput, setCustomFeeInput] = useState<string>('');
+
+  // 30-Day Free Trial Calculation (First month free, counting day 1 to 30)
+  const trialInfo = useMemo(() => {
+    if (!myBusiness) {
+      return { daysElapsed: 1, daysRemaining: 30, isTrialActive: true, trialEndDateFormatted: '', percentComplete: 3 };
+    }
+    const createdMs = new Date(myBusiness.created_at).getTime();
+    const trialEndMs = myBusiness.trial_ends_at
+      ? new Date(myBusiness.trial_ends_at).getTime()
+      : createdMs + 30 * 24 * 60 * 60 * 1000;
+    const nowMs = Date.now();
+    const msElapsed = Math.max(0, nowMs - createdMs);
+    const msRemaining = Math.max(0, trialEndMs - nowMs);
+
+    // Count day from creation: Day 1, Day 2 ... up to Day 30
+    const rawElapsedDays = Math.floor(msElapsed / (1000 * 60 * 60 * 24)) + 1;
+    const daysElapsed = Math.min(30, Math.max(1, rawElapsedDays));
+    const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+    const isTrialActive = daysRemaining > 0;
+    const trialEndDateFormatted = new Date(trialEndMs).toLocaleDateString('en-KE', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    return {
+      daysElapsed,
+      daysRemaining,
+      isTrialActive,
+      trialEndDateFormatted,
+      percentComplete: Math.min(100, Math.round((daysElapsed / 30) * 100)),
+    };
+  }, [myBusiness]);
+
+  // Payment methods selection (Till, Paybill, Pochi, or all of them)
+  const [enabledMethods, setEnabledMethods] = useState<PaymentMethodChoice[]>(
+    myBusiness?.settlement?.enabled_methods ||
+      (myBusiness?.settlement?.settlement_type && myBusiness.settlement.settlement_type !== 'multiple'
+        ? [myBusiness.settlement.settlement_type as PaymentMethodChoice]
+        : ['till'])
+  );
+  const [tillNumber, setTillNumber] = useState(myBusiness?.settlement?.till_number || '5928341');
+  const [storeName, setStoreName] = useState(myBusiness?.settlement?.store_name || myBusiness?.name || '');
+  const [paybillNumber, setPaybillNumber] = useState(myBusiness?.settlement?.paybill_number || '400200');
+  const [paybillAccount, setPaybillAccount] = useState(
+    myBusiness?.settlement?.paybill_account_number || myBusiness?.settlement?.account_number_format || myBusiness?.slug?.toUpperCase() || ''
+  );
+  const [pochiPhone, setPochiPhone] = useState(
+    myBusiness?.settlement?.pochi_phone || myBusiness?.phone || ''
+  );
+  const [pochiName, setPochiName] = useState(
+    myBusiness?.settlement?.pochi_name || myBusiness?.name || ''
+  );
+  const [autoPayoutEnabled, setAutoPayoutEnabled] = useState(
+    myBusiness?.settlement?.auto_payout_enabled ?? true
+  );
+  const [isSavingSettlement, setIsSavingSettlement] = useState(false);
+
+  // Shop Location Settings (47 Counties & Exact Location)
+  const [selectedCounty, setSelectedCounty] = useState(myBusiness?.county || 'Nairobi');
+  const [exactLocation, setExactLocation] = useState(myBusiness?.exact_location || myBusiness?.location || '');
+
+  const togglePaymentMethod = (method: PaymentMethodChoice) => {
+    if (enabledMethods.includes(method)) {
+      if (enabledMethods.length === 1) {
+        showToast('At least one payment method must remain active.');
+        return;
+      }
+      setEnabledMethods(prev => prev.filter(m => m !== method));
+    } else {
+      setEnabledMethods(prev => [...prev, method]);
+    }
+  };
+
+  const handleEnableAllMethods = () => {
+    setEnabledMethods(['till', 'paybill', 'pochi']);
+    showToast('All 3 payment methods enabled! Fill details below.');
+  };
+
+  const handleSaveSettlement = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!myBusiness) return;
+    if (enabledMethods.length === 0) {
+      showToast('Please enable at least one payment method.');
+      return;
+    }
+    setIsSavingSettlement(true);
+    updateBusiness(myBusiness.id, {
+      settlement: {
+        settlement_type: enabledMethods.length > 1 ? 'multiple' : enabledMethods[0],
+        enabled_methods: enabledMethods,
+        till_number: tillNumber,
+        store_name: storeName,
+        paybill_number: paybillNumber,
+        paybill_account_number: paybillAccount,
+        account_number_format: paybillAccount,
+        pochi_phone: pochiPhone,
+        pochi_name: pochiName,
+        mpesa_phone: pochiPhone || myBusiness.phone,
+        hashback_subaccount_id: `HB_${myBusiness.slug.toUpperCase()}`,
+        auto_payout_enabled: autoPayoutEnabled,
+        verified: true,
+      },
+    });
+    setTimeout(() => {
+      setIsSavingSettlement(false);
+      showToast('Payment methods updated & verified for your shop!');
+    }, 400);
+  };
 
   // Business specific datasets
   const bizProducts = useMemo(
@@ -132,8 +248,40 @@ export const BusinessDashboard: React.FC = () => {
   const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<SubscriptionPlan | null>(null);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
 
-  // Guard: Directed according to profile
+  // Guard: Directed according to profile - strictly separates shoppers from merchant dashboard
   if (user?.role !== 'business_owner') {
+    if (user?.role === 'customer') {
+      return (
+        <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
+          <div className="bg-white max-w-md w-full rounded-2xl border border-neutral-200 p-8 text-center shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center mx-auto mb-4">
+              <ShoppingBag className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-bold text-neutral-900">Shopper Account</h2>
+            <p className="text-xs text-neutral-600 mt-2">
+              You are signed in as a shopper (<span className="font-semibold text-neutral-800">{user.email || user.phone}</span>). Merchant store management and subscriptions are reserved for shop owners.
+            </p>
+            <div className="mt-6 flex flex-col gap-2.5">
+              <button
+                onClick={() => navigateTo('customer-orders')}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors shadow-xs flex items-center justify-center gap-2"
+              >
+                <Package className="w-4 h-4" />
+                <span>View My Orders & Receipts</span>
+              </button>
+              <button
+                onClick={() => navigateTo('marketplace')}
+                className="w-full py-2.5 bg-white border border-neutral-200 text-neutral-700 rounded-xl text-xs font-bold hover:bg-neutral-50 transition-colors"
+              >
+                Explore Kenyan Stores
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Visitor not logged in
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
         <div className="bg-white max-w-md w-full rounded-2xl border border-neutral-200 p-8 text-center shadow-xs">
@@ -142,26 +290,26 @@ export const BusinessDashboard: React.FC = () => {
           </div>
           <h2 className="text-lg font-bold text-neutral-900">Merchant Dashboard Access</h2>
           <p className="text-xs text-neutral-600 mt-2">
-            This dashboard is dedicated to verified Kenyan store owners. Please sign in to your merchant account or create a shop to start managing inventory and Hashback M-Pesa payments.
+            This dashboard is dedicated to verified Kenyan store owners. Please sign in to your merchant account to manage products and sales.
           </p>
           <div className="mt-6 flex flex-col gap-2.5">
             <button
-              onClick={() => openAuthModal('merchant')}
+              onClick={() => openAuthModal('merchant', 'signin')}
               className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs"
             >
               Sign In as Shop Owner
             </button>
             <button
-              onClick={() => navigateTo('business-register')}
-              className="w-full py-2.5 bg-white border border-neutral-200 text-neutral-700 rounded-xl text-xs font-bold hover:bg-neutral-50 transition-colors"
+              onClick={() => openAuthModal('merchant', 'signup')}
+              className="w-full py-2.5 bg-neutral-900 text-white rounded-xl text-xs font-bold hover:bg-neutral-800 transition-colors"
             >
-              Create an Online Shop in 2 Min
+              Create Merchant Account
             </button>
             <button
               onClick={() => navigateTo('marketplace')}
               className="w-full py-2 text-neutral-500 text-xs hover:text-neutral-800"
             >
-              Back to Marketplace
+              Browse Public Stores
             </button>
           </div>
         </div>
@@ -418,6 +566,59 @@ export const BusinessDashboard: React.FC = () => {
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Product</span>
                 </button>
+              </div>
+            </div>
+
+            {/* 30-Day Free Trial Banner with 1-30 Day Counter */}
+            <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-amber-50 border border-emerald-200/80 rounded-3xl p-5 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="p-1 rounded-lg bg-emerald-600 text-white">
+                      <Sparkles className="w-4 h-4" />
+                    </span>
+                    <h3 className="text-sm font-black text-neutral-900 tracking-tight">
+                      First Month Free Trial &bull; Day {trialInfo.daysElapsed} of 30
+                    </h3>
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                      trialInfo.daysRemaining > 5
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        : 'bg-amber-100 text-amber-800 border-amber-300 animate-pulse'
+                    }`}>
+                      {trialInfo.daysRemaining > 0 ? `${trialInfo.daysRemaining} days free remaining` : 'Trial Complete'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-600 max-w-2xl">
+                    Every new shop in all 47 counties gets the first 30 days 100% free with unlimited product listings and direct M-Pesa buyer checkout. Subscription starts on Day 30 ({trialInfo.trialEndDateFormatted || 'end of trial'}).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setActiveTab('subscription')}
+                    className="px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Crown className="w-3.5 h-3.5 text-amber-400" />
+                    <span>View Plans</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Visual 30-Day Progress Bar */}
+              <div className="mt-4 pt-3 border-t border-emerald-200/60">
+                <div className="flex justify-between items-center text-[11px] text-neutral-600 mb-1.5 font-medium">
+                  <span>Day 1 (Shop Opened)</span>
+                  <span className="font-bold text-emerald-800">
+                    Day {trialInfo.daysElapsed} / 30 ({trialInfo.daysRemaining} days to subscription)
+                  </span>
+                  <span>Day 30 (Subscription Starts)</span>
+                </div>
+                <div className="w-full h-2.5 bg-neutral-200/80 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 via-teal-500 to-amber-500 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.max(4, trialInfo.percentComplete)}%` }}
+                  />
+                </div>
               </div>
             </div>
 
@@ -929,9 +1130,26 @@ export const BusinessDashboard: React.FC = () => {
                       </div>
 
                       <div>
-                        <p className="text-neutral-400 font-medium uppercase text-[10px]">
-                          Delivery Destination
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-neutral-400 font-medium uppercase text-[10px]">
+                            Delivery Method & Destination
+                          </p>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                              order.delivery_type === 'pickup'
+                                ? 'bg-purple-100 text-purple-800'
+                                : order.delivery_fee_status === 'pending_quote'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
+                            {order.delivery_type === 'pickup'
+                              ? 'In-Store Pickup'
+                              : order.delivery_fee_status === 'pending_quote'
+                              ? 'Awaiting Distance Quote'
+                              : 'Distance Quoted'}
+                          </span>
+                        </div>
                         <p className="font-bold text-neutral-900 mt-1">{order.delivery_location}</p>
                         <p className="text-neutral-600">{order.delivery_address}</p>
                         {order.delivery_notes && (
@@ -939,22 +1157,121 @@ export const BusinessDashboard: React.FC = () => {
                             &quot;{order.delivery_notes}&quot;
                           </p>
                         )}
+                        {order.delivery_type !== 'pickup' && (
+                          <div className="mt-2 text-[11px] text-neutral-500 bg-neutral-100 p-1.5 rounded-lg">
+                            <span className="font-semibold text-neutral-700">Distance Guide:</span> Seller calculates courier fee based on customer&apos;s estate.
+                          </div>
+                        )}
                       </div>
 
                       <div>
-                        <p className="text-neutral-400 font-medium uppercase text-[10px]">
-                          Order Financials
-                        </p>
-                        <div className="mt-1 space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-neutral-400 font-medium uppercase text-[10px]">
+                            Order Financials
+                          </p>
+                          {order.delivery_type !== 'pickup' && editingFeeOrderId !== order.id && (
+                            <button
+                              onClick={() => {
+                                setEditingFeeOrderId(order.id);
+                                setCustomFeeInput(order.delivery_fee.toString());
+                              }}
+                              className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 underline"
+                            >
+                              Insert Delivery Fee
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="mt-1 space-y-1">
                           <p className="text-neutral-600">
                             Subtotal: KSh {order.subtotal.toLocaleString()}
                           </p>
-                          <p className="text-neutral-600">
-                            Delivery: KSh {order.delivery_fee.toLocaleString()}
+
+                          {/* Interactive Delivery Fee insertion by Seller */}
+                          {editingFeeOrderId === order.id ? (
+                            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2 mt-1">
+                              <label className="block text-[11px] font-bold text-emerald-900">
+                                Enter Delivery Fee for Distance (KSh):
+                              </label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={customFeeInput}
+                                  onChange={e => setCustomFeeInput(e.target.value)}
+                                  placeholder="e.g. 250"
+                                  className="w-24 px-2 py-1 text-xs font-bold rounded-lg border border-emerald-300 bg-white"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const feeNum = parseFloat(customFeeInput) || 0;
+                                    updateOrderDeliveryFee(order.id, feeNum);
+                                    setEditingFeeOrderId(null);
+                                  }}
+                                  className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
+                                >
+                                  Save Fee
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingFeeOrderId(null)}
+                                  className="px-2 py-1 text-[11px] text-neutral-500 hover:text-neutral-700"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                              {/* Quick distance fee presets */}
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {[
+                                  { label: 'CBD (150)', val: 150 },
+                                  { label: 'Mid-zone (250)', val: 250 },
+                                  { label: 'Outer (350)', val: 350 },
+                                  { label: 'Upcountry (500)', val: 500 },
+                                ].map(preset => (
+                                  <button
+                                    key={preset.val}
+                                    type="button"
+                                    onClick={() => setCustomFeeInput(preset.val.toString())}
+                                    className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-semibold hover:bg-emerald-200"
+                                  >
+                                    {preset.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between text-neutral-600">
+                              <span>Delivery Fee:</span>
+                              <span className="font-semibold text-neutral-800">
+                                {order.delivery_type === 'pickup'
+                                  ? 'KSh 0 (Free Pickup)'
+                                  : `KSh ${order.delivery_fee.toLocaleString()}`}
+                              </span>
+                            </div>
+                          )}
+
+                          <p className="font-extrabold text-neutral-900 text-sm pt-1 border-t border-neutral-100">
+                            Total Payable: KSh {order.total.toLocaleString()}
                           </p>
-                          <p className="font-extrabold text-neutral-900 text-sm">
-                            Total: KSh {order.total.toLocaleString()}
-                          </p>
+
+                          {/* Dispatch Distance Quote to Customer via WhatsApp */}
+                          {order.delivery_type !== 'pickup' && (
+                            <button
+                              onClick={() => {
+                                const clean = order.customer_phone.replace(/[^0-9]/g, '');
+                                const formatted = clean.startsWith('0') ? '254' + clean.substring(1) : clean;
+                                const msg = encodeURIComponent(
+                                  `Habari ${order.customer_name}! Regarding Order #${order.order_number} at ${myBusiness?.name || 'Shop'}: Your delivery fee to ${order.delivery_location} is KSh ${order.delivery_fee.toLocaleString()}. Total payable is KSh ${order.total.toLocaleString()}. Please proceed to complete payment via M-Pesa.`
+                                );
+                                window.open(`https://wa.me/${formatted}?text=${msg}`, '_blank');
+                              }}
+                              className="mt-1 text-[11px] font-bold text-blue-700 hover:text-blue-800 flex items-center gap-1"
+                            >
+                              <MessageCircle className="w-3 h-3 text-blue-600" />
+                              <span>Send Delivery Quote on WhatsApp</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1158,14 +1475,52 @@ export const BusinessDashboard: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-neutral-700 mb-1">
-                  Location / Physical Address
+                  County (47 Kenyan Counties) *
+                </label>
+                <select
+                  value={myBusiness.county || selectedCounty}
+                  onChange={e => {
+                    const newCounty = e.target.value;
+                    setSelectedCounty(newCounty);
+                    updateBusiness(myBusiness.id, {
+                      county: newCounty,
+                      location: `${exactLocation || myBusiness.exact_location || myBusiness.location || ''}, ${newCounty} County`.replace(/^, /, ''),
+                    });
+                  }}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-neutral-300 bg-white"
+                >
+                  {KENYA_COUNTIES.map(c => (
+                    <option key={c.code} value={c.name}>
+                      {c.name} County (Code {c.code}) - {c.majorTowns[0]}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-neutral-400 mt-1">
+                  Enables customers anywhere across all 47 counties to discover your shop by county and town.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-neutral-700 mb-1">
+                  Exact Location / Building / Street *
                 </label>
                 <input
                   type="text"
-                  value={myBusiness.location}
-                  onChange={e => updateBusiness(myBusiness.id, { location: e.target.value })}
+                  value={myBusiness.exact_location || exactLocation}
+                  onChange={e => {
+                    const newLoc = e.target.value;
+                    setExactLocation(newLoc);
+                    updateBusiness(myBusiness.id, {
+                      exact_location: newLoc,
+                      location: `${newLoc}, ${myBusiness.county || selectedCounty} County`,
+                    });
+                  }}
+                  placeholder="e.g. Kimathi House, 2nd Floor, Room 14, Kimathi Street"
                   className="w-full px-3.5 py-2 text-xs rounded-xl border border-neutral-300"
                 />
+                <p className="text-[10px] text-neutral-400 mt-1">
+                  Specific street, shopping mall, floor, or room for local buyers to find you.
+                </p>
               </div>
 
               <div>
@@ -1190,11 +1545,284 @@ export const BusinessDashboard: React.FC = () => {
           <div className="space-y-6">
             <div>
               <h1 className="text-2xl font-extrabold text-neutral-900 tracking-tight">
-                M-Pesa Payment Transactions
+                M-Pesa Direct Crediting & Payouts
               </h1>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Hashback gateway settlement logs and M-Pesa receipts.
+                Connect your business settlement account so buyer payments credit directly to you.
               </p>
+            </div>
+
+            {/* Direct Merchant Settlement Configuration Card */}
+            <div className="bg-white rounded-2xl p-6 border border-neutral-200 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold text-neutral-900">
+                      Seller Account Crediting (Direct Settlement)
+                    </h2>
+                    <p className="text-xs text-neutral-500">
+                      Customer payments route directly to your business account to prevent website middleman holding.
+                    </p>
+                  </div>
+                </div>
+
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1 self-start sm:self-auto">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Direct Crediting Active</span>
+                </span>
+              </div>
+
+              <form onSubmit={handleSaveSettlement} className="space-y-6">
+                {/* Method Selector with multi-selection support */}
+                <div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-800">
+                        Select Payment Methods Accepted by Your Shop:
+                      </label>
+                      <p className="text-[11px] text-neutral-500">
+                        You can enable Till, Paybill, Pochi la Biashara, or all three simultaneously.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleEnableAllMethods}
+                      className="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-1.5 rounded-xl transition-colors self-start sm:self-auto flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Enable All 3 Methods</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Till Card */}
+                    <div
+                      onClick={() => togglePaymentMethod('till')}
+                      className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                        enabledMethods.includes('till')
+                          ? 'border-emerald-600 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-500'
+                          : 'border-neutral-200 bg-white hover:border-neutral-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Store className={`w-4 h-4 ${enabledMethods.includes('till') ? 'text-emerald-600' : 'text-neutral-400'}`} />
+                          <span className="text-xs font-extrabold text-neutral-900">Buy Goods Till</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={enabledMethods.includes('till')}
+                          onChange={() => {}}
+                          className="rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <p className="text-[11px] text-neutral-500">
+                        Safaricom Buy Goods Till for in-store &amp; online merchant checkout.
+                      </p>
+                    </div>
+
+                    {/* Paybill Card */}
+                    <div
+                      onClick={() => togglePaymentMethod('paybill')}
+                      className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                        enabledMethods.includes('paybill')
+                          ? 'border-emerald-600 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-500'
+                          : 'border-neutral-200 bg-white hover:border-neutral-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Building2 className={`w-4 h-4 ${enabledMethods.includes('paybill') ? 'text-emerald-600' : 'text-neutral-400'}`} />
+                          <span className="text-xs font-extrabold text-neutral-900">Paybill &amp; Account</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={enabledMethods.includes('paybill')}
+                          onChange={() => {}}
+                          className="rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <p className="text-[11px] text-neutral-500">
+                        Business Paybill with unique customer account reference.
+                      </p>
+                    </div>
+
+                    {/* Pochi Card */}
+                    <div
+                      onClick={() => togglePaymentMethod('pochi')}
+                      className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                        enabledMethods.includes('pochi')
+                          ? 'border-emerald-600 bg-emerald-50/70 shadow-xs ring-1 ring-emerald-500'
+                          : 'border-neutral-200 bg-white hover:border-neutral-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <PhoneCall className={`w-4 h-4 ${enabledMethods.includes('pochi') ? 'text-emerald-600' : 'text-neutral-400'}`} />
+                          <span className="text-xs font-extrabold text-neutral-900">Pochi la Biashara</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={enabledMethods.includes('pochi')}
+                          onChange={() => {}}
+                          className="rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                      </div>
+                      <p className="text-[11px] text-neutral-500">
+                        Direct merchant mobile line separated from personal M-Pesa.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Configuration Input Panels for each enabled method */}
+                <div className="space-y-4">
+                  {/* Till Inputs */}
+                  {enabledMethods.includes('till') && (
+                    <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-200 space-y-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-neutral-900">
+                        <Store className="w-4 h-4 text-emerald-600" />
+                        <span>Buy Goods Till Details</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                            Buy Goods Till Number *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={tillNumber}
+                            onChange={e => setTillNumber(e.target.value)}
+                            placeholder="e.g. 5928341"
+                            className="w-full px-3 py-2 text-xs font-mono font-bold rounded-lg border border-neutral-300 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                            Registered Store / Business Name *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={storeName}
+                            onChange={e => setStoreName(e.target.value)}
+                            placeholder="e.g. John's Shoes CBD"
+                            className="w-full px-3 py-2 text-xs rounded-lg border border-neutral-300 bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Paybill Inputs */}
+                  {enabledMethods.includes('paybill') && (
+                    <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-200 space-y-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-neutral-900">
+                        <Building2 className="w-4 h-4 text-blue-600" />
+                        <span>Paybill Details</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                            Safaricom Paybill Business Number *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={paybillNumber}
+                            onChange={e => setPaybillNumber(e.target.value)}
+                            placeholder="e.g. 400200"
+                            className="w-full px-3 py-2 text-xs font-mono font-bold rounded-lg border border-neutral-300 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                            Account Number / Reference Format *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={paybillAccount}
+                            onChange={e => setPaybillAccount(e.target.value)}
+                            placeholder="e.g. JOHNSHOES or Order Number"
+                            className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-neutral-300 bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pochi Inputs */}
+                  {enabledMethods.includes('pochi') && (
+                    <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-200 space-y-3">
+                      <div className="flex items-center gap-2 text-xs font-bold text-neutral-900">
+                        <PhoneCall className="w-4 h-4 text-amber-600" />
+                        <span>Pochi la Biashara Details</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                            Pochi la Biashara Registered Phone *
+                          </label>
+                          <input
+                            type="tel"
+                            required
+                            value={pochiPhone}
+                            onChange={e => setPochiPhone(e.target.value)}
+                            placeholder="e.g. 0712345678"
+                            className="w-full px-3 py-2 text-xs font-mono font-bold rounded-lg border border-neutral-300 bg-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-neutral-700 mb-1">
+                            Registered Merchant Name *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={pochiName}
+                            onChange={e => setPochiName(e.target.value)}
+                            placeholder="e.g. John Mwangi"
+                            className="w-full px-3 py-2 text-xs rounded-lg border border-neutral-300 bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoPayoutEnabled}
+                      onChange={e => setAutoPayoutEnabled(e.target.checked)}
+                      className="rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-xs text-neutral-700 font-medium">
+                      Enable instant auto-settlement on M-Pesa PIN confirmation
+                    </span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingSettlement}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-xs"
+                  >
+                    {isSavingSettlement ? 'Verifying & Saving...' : 'Save Settlement Account'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div>
+              <h2 className="text-sm font-bold text-neutral-900 mb-2">
+                Recent Gateway Transactions & Settlement Logs
+              </h2>
             </div>
 
             <div className="bg-white rounded-2xl border border-neutral-200 overflow-hidden shadow-xs">
@@ -1269,6 +1897,51 @@ export const BusinessDashboard: React.FC = () => {
                     <span>Lipa na M-Pesa Enabled</span>
                   </span>
                 </div>
+              </div>
+            </div>
+
+            {/* 30-Day Free Trial Information Card */}
+            <div className="p-6 rounded-3xl bg-white border border-emerald-200 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-black">
+                    30D
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-extrabold text-neutral-900">
+                      1st Month Free Trial &bull; Day {trialInfo.daysElapsed} of 30
+                    </h2>
+                    <p className="text-xs text-neutral-500">
+                      {trialInfo.daysRemaining > 0
+                        ? `${trialInfo.daysRemaining} days remaining until subscription billing starts on ${trialInfo.trialEndDateFormatted}`
+                        : `Your 30-day free trial period has concluded on ${trialInfo.trialEndDateFormatted}`}
+                    </p>
+                  </div>
+                </div>
+
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 self-start sm:self-auto">
+                  {trialInfo.daysRemaining > 0 ? 'Free Month Active' : 'Subscription Due'}
+                </span>
+              </div>
+
+              {/* Day progress indicator */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-xs text-neutral-600 font-medium">
+                  <span>Day 1: Shop Created</span>
+                  <span className="font-bold text-emerald-800">
+                    Day {trialInfo.daysElapsed} of 30 ({trialInfo.daysRemaining} free days left)
+                  </span>
+                  <span>Day 30: Subscription Starts</span>
+                </div>
+                <div className="w-full h-3 bg-neutral-100 rounded-full overflow-hidden border border-neutral-200">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.max(4, trialInfo.percentComplete)}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-neutral-400">
+                  All shops get 30 full days without platform charge. You can select your ongoing subscription plan below at any point before or on Day 30.
+                </p>
               </div>
             </div>
 

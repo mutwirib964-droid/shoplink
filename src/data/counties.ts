@@ -1,0 +1,57 @@
+export interface KenyaCounty {
+  code: string;
+  name: string;
+  majorTowns: string[];
+}
+
+export const KENYA_COUNTIES: KenyaCounty[] = [
+  { code: '001', name: 'Mombasa', majorTowns: ['Mombasa CBD', 'Nyali', 'Likoni', 'Kisauni', 'Changamwe', 'Jomvu', 'Bamburi'] },
+  { code: '002', name: 'Kwale', majorTowns: ['Diani', 'Ukunda', 'Msambweni', 'Kinango', 'Kwale Town', 'Lunga Lunga'] },
+  { code: '003', name: 'Kilifi', majorTowns: ['Malindi', 'Kilifi Town', 'Watamu', 'Mtwapa', 'Kaloleni', 'Mariakani'] },
+  { code: '004', name: 'Tana River', majorTowns: ['Hola', 'Madogo', 'Garsen', 'Bura'] },
+  { code: '005', name: 'Lamu', majorTowns: ['Lamu Old Town', 'Mpeketoni', 'Shela', 'Mokowe', 'Witu'] },
+  { code: '006', name: 'Taita Taveta', majorTowns: ['Voi', 'Wundanyi', 'Taveta', 'Mwatate'] },
+  { code: '007', name: 'Garissa', majorTowns: ['Garissa Town', 'Dadaab', 'Masalani', 'Modogashe'] },
+  { code: '008', name: 'Wajir', majorTowns: ['Wajir Town', 'Habaswein', 'Eldas', 'Bute', 'Tarbaj'] },
+  { code: '009', name: 'Mandera', majorTowns: ['Mandera Town', 'Elwak', 'Rhamu', 'Takaba'] },
+  { code: '010', name: 'Marsabit', majorTowns: ['Marsabit Town', 'Moyale', 'Loiyangalani', 'Laisamis', 'North Horr'] },
+  { code: '011', name: 'Isiolo', majorTowns: ['Isiolo Town', 'Garbatulla', 'Merti', 'Oldonyiro'] },
+  { code: '012', name: 'Meru', majorTowns: ['Meru Town', 'Nkubu', 'Maua', 'Makutano', 'Timau', 'Githongo'] },
+  { code: '013', name: 'Tharaka-Nithi', majorTowns: ['Chuka', 'Chogoria', 'Marimanti', 'Kathwana'] },
+  { code: '014', name: 'Embu', majorTowns: ['Embu Town', 'Runyenjes', 'Siakago', 'Kiritiri'] },
+  { code: '015', name: 'Kitui', majorTowns: ['Kitui Town', 'Mwingi', 'Mutomo', 'Kwa Vonza', 'Ikutha'] },
+  { code: '016', name: 'Machakos', majorTowns: ['Machakos Town', 'Athi River', 'Syokimau', 'Mlolongo', 'Kangundo', 'Tala'] },
+  { code: '017', name: 'Makueni', majorTowns: ['Wote', 'Kibwezi', 'Emali', 'Mtito Andei', 'Makindu', 'Sultan Hamud'] },
+  { code: '018', name: 'Nyandarua', majorTowns: ['Ol Kalou', 'Engineer', 'Nyahururu Border', 'Ndaragwa', 'Mirangine'] },
+  { code: '019', name: 'Nyeri', majorTowns: ['Nyeri Town', 'Karatina', 'Othaya', 'Mukurwe-ini', 'Mweiga', 'Naro Moru'] },
+  { code: '020', name: 'Kirinyaga', majorTowns: ['Kerugoya', 'Kutus', 'Sagana', 'Wang\'uru', 'Baricho'] },
+  { code: '021', name: 'Murang\'a', majorTowns: ['Murang\'a Town', 'Kenol', 'Kangema', 'Maragua', 'Kigumo', 'Gatanga'] },
+  { code: '022', name: 'Kiambu', majorTowns: ['Kiambu Town', 'Thika', 'Ruiru', 'Kikuyu', 'Limuru', 'Juja', 'Githurai 45', 'Wangige'] },
+  { code: '023', name: 'Turkana', majorTowns: ['Lodwar', 'Kakuma', 'Lokichogio', 'Lokichar', 'Kalokol'] },
+  { code: '024', name: 'West Pokot', majorTowns: ['Kapenguria', 'Makutano', 'Chepareria', 'Sigor'] },
+  { code: '025', name: 'Samburu', majorTowns: ['Maralal', 'Baragoi', 'Wamba', 'Archers Post'] },
+  { code: '026', name: 'Trans Nzoia', majorTowns: ['Kitale', 'Endebess', 'Kiminini', 'Sirende'] },
+  { code: '027', name: 'Uasin Gishu', majorTowns: ['Eldoret CBD', 'Pioneer', 'Langas', 'Huruma', 'Kapseret', 'Turbo', 'Moiben'] },
+  { code: '028', name: 'Elgeyo Marakwet', majorTowns: ['Iten', 'Kapsowar', 'Tambach', 'Chepkorio'] },
+  { code: '029', name: 'Nandi', majorTowns: ['Kapsabet', 'Nandi Hills', 'Mosoriot', 'Kobujoi'] },
+  { code: '030', name: 'Baringo', majorTowns: ['Kabarnet', 'Eldama Ravine', 'Marigat', 'Mogotio', 'Chemolingot'] },
+  { code: '031', name: 'Laikipia', majorTowns: ['Nanyuki', 'Nyahururu', 'Rumuruti', 'Doldol', 'Kinamba'] },
+  { code: '032', name: 'Nakuru', majorTowns: ['Nakuru CBD', 'Naivasha', 'Gilgil', 'Njoro', 'Molo', 'Rongai', 'Subukia'] },
+  { code: '033', name: 'Narok', majorTowns: ['Narok Town', 'Kilgoris', 'Maasai Mara Hub', 'Ololulung\'a'] },
+  { code: '034', name: 'Kajiado', majorTowns: ['Kitengela', 'Ngong', 'Ongata Rongai', 'Kiserian', 'Kajiado Town', 'Loitokitok', 'Namanga'] },
+  { code: '035', name: 'Kericho', majorTowns: ['Kericho Town', 'Litein', 'Kipkelion', 'Londiani', 'Sondu'] },
+  { code: '036', name: 'Bomet', majorTowns: ['Bomet Town', 'Sotik', 'Silibwet', 'Longisa', 'Mulot'] },
+  { code: '037', name: 'Kakamega', majorTowns: ['Kakamega Town', 'Mumias', 'Butere', 'Malava', 'Lugari', 'Khwisero'] },
+  { code: '038', name: 'Vihiga', majorTowns: ['Mbale', 'Chavakali', 'Luanda', 'Hamisi', 'Serem'] },
+  { code: '039', name: 'Bungoma', majorTowns: ['Bungoma Town', 'Webuye', 'Kimilili', 'Chwele', 'Sirisia', 'Malakisi'] },
+  { code: '040', name: 'Busia', majorTowns: ['Busia Town', 'Malaba', 'Nambale', 'Port Victoria', 'Funyula', 'Bumala'] },
+  { code: '041', name: 'Siaya', majorTowns: ['Siaya Town', 'Bondo', 'Ugunja', 'Yala', 'Usenge'] },
+  { code: '042', name: 'Kisumu', majorTowns: ['Kisumu CBD', 'Kondele', 'Milimani', 'Maseno', 'Ahero', 'Kisian', 'Muhoroni'] },
+  { code: '043', name: 'Homa Bay', majorTowns: ['Homa Bay Town', 'Mbita', 'Oyugis', 'Kendu Bay', 'Ndhiwa'] },
+  { code: '044', name: 'Migori', majorTowns: ['Migori Town', 'Rongo', 'Isebania', 'Kehancha', 'Awendo'] },
+  { code: '045', name: 'Kisii', majorTowns: ['Kisii Town', 'Suneka', 'Ogembo', 'Keroka', 'Nyamache'] },
+  { code: '046', name: 'Nyamira', majorTowns: ['Nyamira Town', 'Nyansiongo', 'Keroka Border', 'Manga'] },
+  { code: '047', name: 'Nairobi', majorTowns: ['Nairobi CBD', 'Westlands', 'Kilimani', 'Eastleigh', 'Karen', 'Kasarani', 'Roysambu', 'Embakasi', 'Lang\'ata', 'South B', 'South C', 'Parklands', 'Ngara', 'Utawala', 'Ruai', 'Githurai'] },
+];
+
+export const COUNTY_NAMES = KENYA_COUNTIES.map(c => c.name);

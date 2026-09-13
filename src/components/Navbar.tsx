@@ -15,6 +15,7 @@ import {
   Package,
   Sparkles,
   ArrowRight,
+  UserPlus,
 } from 'lucide-react';
 import { ASSISTANCE_CONFIG, buildWhatsAppUrl } from '../lib/assistanceConfig';
 
@@ -300,17 +301,7 @@ export const Navbar: React.FC = () => {
                             className="w-full text-left px-4 py-2 text-xs text-neutral-700 hover:bg-neutral-50 flex items-center gap-2.5 font-medium"
                           >
                             <ShoppingBag className="w-4 h-4 text-neutral-500" />
-                            <span>Browse More Stores</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              navigateTo('business-register');
-                              setProfileMenuOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center gap-2.5 font-bold"
-                          >
-                            <Sparkles className="w-4 h-4 text-emerald-600" />
-                            <span>Start Selling (Create a Shop)</span>
+                            <span>Browse Kenyan Stores</span>
                           </button>
                         </>
                       )}
@@ -346,22 +337,48 @@ export const Navbar: React.FC = () => {
               </div>
             ) : (
               /* Signed out / Visitor State */
-              <button
-                onClick={() => openAuthModal('merchant')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-xs font-semibold text-neutral-700 transition-colors"
-              >
-                <LogIn className="w-3.5 h-3.5 text-neutral-500" />
-                <span>Sign In</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => openAuthModal('merchant', 'signin')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-xs font-semibold text-neutral-700 transition-colors"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-neutral-500" />
+                  <span>Sign In</span>
+                </button>
+                <button
+                  onClick={() => openAuthModal('customer', 'signup')}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 text-white hover:bg-neutral-800 text-xs font-bold transition-colors shadow-xs"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Create Account</span>
+                </button>
+              </div>
             )}
 
-            {/* Main CTA: Create Shop */}
-            {user?.role !== 'business_owner' && (
+            {/* Role-adaptive CTA: Business owners see Dashboard, Shoppers see My Orders, Visitors see Explore Shops */}
+            {user?.role === 'business_owner' ? (
               <button
-                onClick={() => navigateTo('business-register')}
-                className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-600/20"
+                onClick={() => navigateTo('dashboard')}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs"
               >
-                <span>Create Shop</span>
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span>Dashboard</span>
+              </button>
+            ) : user?.role === 'customer' ? (
+              <button
+                onClick={() => navigateTo('customer-orders')}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors shadow-xs"
+              >
+                <Package className="w-3.5 h-3.5" />
+                <span>My Orders</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => navigateTo('marketplace')}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs"
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>Explore Shops</span>
               </button>
             )}
 
@@ -405,21 +422,21 @@ export const Navbar: React.FC = () => {
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => {
-                  openAuthModal('merchant');
+                  openAuthModal('merchant', 'signin');
                   setMobileMenuOpen(false);
                 }}
-                className="py-2.5 rounded-xl border border-neutral-300 text-xs font-bold text-neutral-800 text-center"
+                className="py-2.5 rounded-xl border border-neutral-300 text-xs font-bold text-neutral-800 text-center hover:bg-neutral-50"
               >
                 Sign In
               </button>
               <button
                 onClick={() => {
-                  navigateTo('business-register');
+                  openAuthModal('customer', 'signup');
                   setMobileMenuOpen(false);
                 }}
-                className="py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold text-center shadow-xs"
+                className="py-2.5 rounded-xl bg-neutral-900 text-white text-xs font-bold text-center shadow-xs hover:bg-neutral-800"
               >
-                Create Shop
+                Create Account
               </button>
             </div>
           )}

@@ -20,6 +20,7 @@ import {
   INITIAL_CUSTOMERS,
   INITIAL_PLANS,
 } from '../data/mockData';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface AppContextType {
   // Auth
@@ -27,13 +28,18 @@ interface AppContextType {
   setUser: (user: UserProfile | null) => void;
   login: (email: string, role?: UserRole, redirect?: boolean) => void;
   register: (name: string, email: string, phone: string, role: UserRole) => Promise<UserProfile>;
+  loginWithPassword: (email: string, password: string, role?: UserRole, redirect?: boolean) => Promise<{ success: boolean; error?: string }>;
+  registerWithPassword: (name: string, email: string, phone: string, role: UserRole, password?: string) => Promise<{ success: boolean; user?: UserProfile; error?: string }>;
   logout: () => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   authModalTab: 'merchant' | 'customer' | 'admin';
   setAuthModalTab: (tab: 'merchant' | 'customer' | 'admin') => void;
-  openAuthModal: (defaultTab?: 'merchant' | 'customer' | 'admin') => void;
+  authModalMode: 'signin' | 'signup';
+  setAuthModalMode: (mode: 'signin' | 'signup') => void;
+  openAuthModal: (defaultTab?: 'merchant' | 'customer' | 'admin', defaultMode?: 'signin' | 'signup') => void;
   closeAuthModal: () => void;
+  isSupabaseConfigured: boolean;
 
   // Navigation
   currentRoute: string;
@@ -79,10 +85,13 @@ interface AppContextType {
     deliveryLocation: string;
     deliveryAddress: string;
     deliveryNotes?: string;
+    deliveryType?: 'delivery' | 'pickup';
+    deliveryFee?: number;
     mpesaPhone: string;
   }) => Promise<{ order: Order; paymentPrompt: any }>;
   processPaymentWebhook: (orderId: string, status: PaymentStatus, receiptNumber?: string) => Promise<boolean>;
   updateOrderStatus: (orderId: string, newStatus: OrderStatus) => void;
+  updateOrderDeliveryFee: (orderId: string, fee: number) => void;
 
   // Customers & Subscriptions
   customers: CustomerRecord[];
@@ -154,21 +163,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentRoute, setCurrentRoute] = useState<string>(initialNav.route);
   const [activeShopSlug, setActiveShopSlug] = useState<string>(initialNav.slug);
 
-  // User Authentication
+  // User Authentication: Defaults to null so each visitor creates their own account or signs in
   const [user, setUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.USER);
     if (saved) {
       try { return JSON.parse(saved); } catch {}
     }
-    // Default logged in as John's Shoes business owner for immediate rich preview
-    return {
-      id: 'user-john-1',
-      email: 'john@shoeske.com',
-      full_name: 'John Kamau',
-      phone: '0712345678',
-      role: 'business_owner',
-      created_at: '2026-08-01T10:00:00Z',
-    };
+    return null;
   });
 
   // State
@@ -220,15 +221,130 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Auth Modal State
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalTab, setAuthModalTab] = useState<'merchant' | 'customer' | 'admin'>('merchant');
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
 
-  const openAuthModal = (defaultTab: 'merchant' | 'customer' | 'admin' = 'merchant') => {
+  const openAuthModal = (
+    defaultTab: 'merchant' | 'customer' | 'admin' = 'merchant',
+    defaultMode: 'signin' | 'signup' = 'signin'
+  ) => {
     setAuthModalTab(defaultTab);
+    setAuthModalMode(defaultMode);
     setIsAuthModalOpen(true);
   };
 
   const closeAuthModal = () => {
     setIsAuthModalOpen(false);
   };
+
+  // -----------------------------------------------------------------------
+  // Supabase Data & Auth Synchronizer: Fetch businesses, products & profiles
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (!supabase || !isSupabaseConfigured) return;
+
+    const loadSupabaseCatalog = async () => {
+      try {
+        // 1. Fetch businesses
+        const { data: dbBusinesses, error: bErr } = await supabase
+          .from('businesses')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (dbBusinesses && dbBusinesses.length > 0 && !bErr) {
+          setBusinesses(prev => {
+            const map = new Map<string, Business>();
+            dbBusinesses.forEach((b: any) => map.set(b.id, b));
+            prev.forEach(b => {
+              if (!map.has(b.id) && !dbBusinesses.some((rb: any) => rb.slug === b.slug)) {
+                map.set(b.id, b);
+              }
+            });
+            return Array.from(map.values());
+          });
+        }
+
+        // 2. Fetch products (visible to everyone!)
+        const { data: dbProducts, error: pErr } = await supabase
+          .from('products')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+        if (dbProducts && dbProducts.length > 0 && !pErr) {
+          setProducts(prev => {
+            const map = new Map<string, Product>();
+            dbProducts.forEach((p: any) => map.set(p.id, p));
+            prev.forEach(p => {
+              if (!map.has(p.id)) {
+                map.set(p.id, p);
+              }
+            });
+            return Array.from(map.values());
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase catalog sync skipped:', err);
+      }
+    };
+
+    loadSupabaseCatalog();
+
+    // Check active Supabase Auth session
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (profile) {
+            setUser({
+              id: profile.id,
+              email: profile.email,
+              full_name: profile.full_name,
+              phone: profile.phone || '',
+              role: profile.role,
+              created_at: profile.created_at,
+            });
+          }
+        } catch (e) {
+          console.warn('Supabase session load error:', e);
+        }
+      }
+    });
+
+    // Listen for auth changes
+    const { data: authSub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (profile) {
+            setUser({
+              id: profile.id,
+              email: profile.email,
+              full_name: profile.full_name,
+              phone: profile.phone || '',
+              role: profile.role,
+              created_at: profile.created_at,
+            });
+          }
+        } catch (e) {
+          console.warn('Supabase profile listener error:', e);
+        }
+      }
+    });
+
+    return () => {
+      authSub.subscription.unsubscribe();
+    };
+  }, []);
 
   // Sync to local storage
   useEffect(() => {
@@ -309,8 +425,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Auth actions
-  const login = (email: string, role: UserRole = 'business_owner', redirect: boolean = true) => {
+  // -----------------------------------------------------------------------
+  // Auth Actions: Sign In & Sign Up with Supabase & Local Fallback
+  // -----------------------------------------------------------------------
+  const loginWithPassword = async (
+    email: string,
+    password: string,
+    role: UserRole = 'customer',
+    redirect: boolean = true
+  ): Promise<{ success: boolean; error?: string }> => {
+    // 1. Try Supabase Auth first if configured
+    if (supabase && isSupabaseConfigured) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+
+        if (data.user) {
+          // Fetch profile from profiles table
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .maybeSingle();
+
+          const loggedInUser: UserProfile = {
+            id: data.user.id,
+            email: data.user.email || email,
+            full_name: profile?.full_name || data.user.user_metadata?.full_name || email.split('@')[0],
+            phone: profile?.phone || data.user.user_metadata?.phone || '',
+            role: (profile?.role as UserRole) || (data.user.user_metadata?.role as UserRole) || role,
+            created_at: data.user.created_at,
+          };
+
+          setUser(loggedInUser);
+          showToast(`Welcome back, ${loggedInUser.full_name}!`);
+
+          if (redirect) {
+            if (loggedInUser.role === 'business_owner') navigateTo('dashboard');
+            else if (loggedInUser.role === 'admin') navigateTo('admin');
+            else navigateTo('customer-orders');
+          }
+
+          return { success: true };
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Authentication failed' };
+      }
+    }
+
+    // 2. Local Fallback Mode
     let matchedUser: UserProfile;
     if (role === 'admin') {
       matchedUser = {
@@ -324,37 +493,96 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast(`Signed in to Platform Admin Console`);
       if (redirect) navigateTo('admin');
     } else if (role === 'customer') {
+      const shopperName = email.includes('@') ? email.split('@')[0] : email;
       matchedUser = {
         id: 'cust-' + Date.now(),
         email: email || 'customer@gmail.com',
-        full_name: 'David Mwangi',
-        phone: '0711445566',
+        full_name: shopperName || 'Shopper',
+        phone: email.startsWith('0') ? email : '0711445566',
         role: 'customer',
         created_at: new Date().toISOString(),
       };
       setUser(matchedUser);
       showToast(`Signed in as Shopper (${matchedUser.full_name})`);
-      if (redirect) navigateTo('customer-orders');
+      if (redirect && currentRoute === 'landing') navigateTo('marketplace');
+      else if (redirect) navigateTo('customer-orders');
     } else {
-      // Find or assign business owner
       const existingBiz = businesses.find(
         b => b.email.toLowerCase() === email.toLowerCase() || b.phone === email
       );
       matchedUser = {
         id: existingBiz ? existingBiz.owner_id : 'user-' + Date.now(),
-        email: email || (existingBiz ? existingBiz.email : 'john@shoeske.com'),
+        email: email || (existingBiz ? existingBiz.email : 'merchant@shoplink.co.ke'),
         full_name: existingBiz ? existingBiz.name + ' Owner' : 'Shop Owner',
         phone: existingBiz?.phone || '0712345678',
         role: 'business_owner',
         created_at: new Date().toISOString(),
       };
       setUser(matchedUser);
-      showToast(`Welcome to your shop dashboard (${existingBiz?.name || "John's Shoes"})`);
+      showToast(`Welcome back to your shop dashboard (${existingBiz?.name || "My Store"})`);
       if (redirect) navigateTo('dashboard');
     }
+
+    return { success: true };
   };
 
-  const register = async (name: string, email: string, phone: string, role: UserRole): Promise<UserProfile> => {
+  const registerWithPassword = async (
+    name: string,
+    email: string,
+    phone: string,
+    role: UserRole,
+    password?: string
+  ): Promise<{ success: boolean; user?: UserProfile; error?: string }> => {
+    // 1. Try Supabase Auth first
+    if (supabase && isSupabaseConfigured && password) {
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+              phone,
+              role,
+            },
+          },
+        });
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+
+        if (data.user) {
+          const newUser: UserProfile = {
+            id: data.user.id,
+            email: data.user.email || email,
+            full_name: name,
+            phone,
+            role,
+            created_at: data.user.created_at || new Date().toISOString(),
+          };
+
+          // Also attempt explicit profile upsert
+          try {
+            await supabase.from('profiles').upsert({
+              id: data.user.id,
+              email: data.user.email || email,
+              full_name: name,
+              phone,
+              role,
+            });
+          } catch {}
+
+          setUser(newUser);
+          showToast(`Account created successfully! Welcome to ShopLink, ${name}.`);
+          return { success: true, user: newUser };
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message || 'Registration failed' };
+      }
+    }
+
+    // 2. Local Fallback Mode
     const newUser: UserProfile = {
       id: 'usr-' + Date.now(),
       email,
@@ -365,17 +593,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setUser(newUser);
     showToast(`Welcome to ShopLink Kenya, ${name}!`);
-    return newUser;
+    return { success: true, user: newUser };
+  };
+
+  // Backwards compatible login / register
+  const login = (email: string, role: UserRole = 'business_owner', redirect: boolean = true) => {
+    loginWithPassword(email, 'demo123', role, redirect);
+  };
+
+  const register = async (name: string, email: string, phone: string, role: UserRole): Promise<UserProfile> => {
+    const res = await registerWithPassword(name, email, phone, role, 'secure123');
+    return res.user || {
+      id: 'usr-' + Date.now(),
+      email,
+      full_name: name,
+      phone,
+      role,
+      created_at: new Date().toISOString(),
+    };
   };
 
   const logout = () => {
+    if (supabase && isSupabaseConfigured) {
+      supabase.auth.signOut().catch(() => {});
+    }
     setUser(null);
     showToast('Signed out successfully.');
     navigateTo('landing');
   };
 
-  // Business relations
-  const myBusiness = businesses.find(b => b.owner_id === user?.id) || businesses[0];
+  // Business relations - ONLY business_owner role receives a myBusiness handle
+  const myBusiness = user?.role === 'business_owner'
+    ? (businesses.find(b => b.owner_id === user?.id) || (user.id === 'user-john-1' ? businesses[0] : undefined))
+    : undefined;
   const currentShop = businesses.find(b => b.slug === activeShopSlug) || businesses[0];
   const currentShopProducts = products.filter(p => p.business_id === currentShop?.id);
 
@@ -386,22 +636,75 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cleanSlug = `${cleanSlug}-${Math.floor(100 + Math.random() * 900)}`;
     }
 
+    const now = new Date();
+    const trialEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // Exactly 30 days free trial
+
     const newBiz: Business = {
       ...data,
       id: 'biz-' + Date.now(),
       slug: cleanSlug,
       currency: 'KSh',
       status: 'active',
-      created_at: new Date().toISOString(),
+      created_at: now.toISOString(),
+      trial_ends_at: trialEnd.toISOString(),
     };
+
+    // If Supabase is active, persist to businesses table
+    if (supabase && isSupabaseConfigured) {
+      try {
+        const { data: dbBiz, error } = await supabase
+          .from('businesses')
+          .insert([
+            {
+              owner_id: data.owner_id,
+              name: data.name,
+              slug: cleanSlug,
+              description: data.description || '',
+              phone: data.phone,
+              email: data.email,
+              location: data.location,
+              county: data.county || 'Nairobi',
+              exact_location: data.exact_location || data.location,
+              category: data.category,
+              logo_url: data.logo_url || '',
+              banner_url: data.banner_url || '',
+              delivery_fee: data.delivery_fee,
+              settlement: data.settlement || { settlement_type: 'till', auto_payout_enabled: true, verified: true },
+              status: 'active',
+              subscription_plan_id: data.subscription_plan_id || 'plan_free',
+              trial_ends_at: trialEnd.toISOString(),
+            },
+          ])
+          .select()
+          .single();
+
+        if (dbBiz && !error) {
+          newBiz.id = dbBiz.id;
+        }
+      } catch (err) {
+        console.warn('Supabase business creation fallback:', err);
+      }
+    }
 
     setBusinesses(prev => [newBiz, ...prev]);
     showToast(`Shop "${newBiz.name}" launched successfully!`);
     return newBiz;
   };
 
-  const updateBusiness = (id: string, updates: Partial<Business>) => {
+  const updateBusiness = async (id: string, updates: Partial<Business>) => {
     setBusinesses(prev => prev.map(b => (b.id === id ? { ...b, ...updates } : b)));
+
+    if (supabase && isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('businesses')
+          .update(updates)
+          .eq('id', id);
+      } catch (err) {
+        console.warn('Supabase business update error:', err);
+      }
+    }
+
     showToast('Shop settings updated.');
   };
 
@@ -419,25 +722,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Marketplace featured status updated.');
   };
 
-  // Product actions
+  // Product actions: Saved to Supabase & visible to everyone!
   const addProduct = async (data: Omit<Product, 'id' | 'created_at'>): Promise<Product> => {
     const newProduct: Product = {
       ...data,
       id: 'prod-' + Date.now(),
       created_at: new Date().toISOString(),
     };
+
+    // If Supabase is active, persist to products table
+    if (supabase && isSupabaseConfigured) {
+      try {
+        const { data: dbProduct, error } = await supabase
+          .from('products')
+          .insert([
+            {
+              business_id: data.business_id,
+              name: data.name,
+              description: data.description || '',
+              price: data.price,
+              sale_price: data.sale_price || null,
+              stock_quantity: data.stock_quantity,
+              category: data.category,
+              image_url: data.image_url,
+              images: data.images || [],
+              is_active: data.is_active ?? true,
+              is_featured: data.is_featured ?? false,
+            },
+          ])
+          .select()
+          .single();
+
+        if (dbProduct && !error) {
+          newProduct.id = dbProduct.id;
+        }
+      } catch (err) {
+        console.warn('Supabase product insert fallback:', err);
+      }
+    }
+
+    // Immediately add to state so all visitors and search see it in real-time
     setProducts(prev => [newProduct, ...prev]);
-    showToast(`Added product "${newProduct.name}"`);
+    showToast(`Added product "${newProduct.name}" - Visible to everyone in the marketplace!`);
     return newProduct;
   };
 
-  const updateProduct = (id: string, updates: Partial<Product>) => {
+  const updateProduct = async (id: string, updates: Partial<Product>) => {
     setProducts(prev => prev.map(p => (p.id === id ? { ...p, ...updates } : p)));
+
+    if (supabase && isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('products')
+          .update(updates)
+          .eq('id', id);
+      } catch (err) {
+        console.warn('Supabase product update error:', err);
+      }
+    }
+
     showToast('Product updated successfully.');
   };
 
-  const deleteProduct = (id: string) => {
+  const deleteProduct = async (id: string) => {
     setProducts(prev => prev.filter(p => p.id !== id));
+
+    if (supabase && isSupabaseConfigured) {
+      try {
+        await supabase
+          .from('products')
+          .delete()
+          .eq('id', id);
+      } catch (err) {
+        console.warn('Supabase product delete error:', err);
+      }
+    }
+
     showToast('Product deleted from inventory.');
   };
 
@@ -502,6 +862,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deliveryLocation: string;
     deliveryAddress: string;
     deliveryNotes?: string;
+    deliveryType?: 'delivery' | 'pickup';
+    deliveryFee?: number;
     mpesaPhone: string;
   }) => {
     if (cart.length === 0) {
@@ -530,6 +892,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       total: (item.product.sale_price || item.product.price) * item.quantity,
     }));
 
+    const deliveryType = payload.deliveryType || 'delivery';
+    const isPickup = deliveryType === 'pickup';
+    const deliveryFee = isPickup
+      ? 0
+      : (payload.deliveryFee !== undefined ? payload.deliveryFee : (currentShop?.delivery_fee || 0));
+    const feeStatus = isPickup
+      ? 'free_pickup'
+      : (payload.deliveryFee !== undefined ? 'quoted' : 'pending_quote');
+    const orderTotal = cartSubtotal + deliveryFee;
+
     const newOrder: Order = {
       id: newOrderId,
       order_number: orderNumber,
@@ -542,11 +914,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       delivery_location: payload.deliveryLocation,
       delivery_address: payload.deliveryAddress,
       delivery_notes: payload.deliveryNotes,
+      delivery_type: deliveryType,
+      delivery_fee_status: feeStatus,
       mpesa_phone: payload.mpesaPhone,
       items: orderItems,
       subtotal: cartSubtotal,
-      delivery_fee: cartDeliveryFee,
-      total: cartTotal,
+      delivery_fee: deliveryFee,
+      total: orderTotal,
       currency: 'KSh',
       payment_status: 'pending',
       order_status: 'pending',
@@ -717,6 +1091,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Order status updated to "${newStatus.toUpperCase()}".`);
   };
 
+  const updateOrderDeliveryFee = (orderId: string, fee: number) => {
+    const validFee = Math.max(0, Math.round(fee));
+    setOrders(prev =>
+      prev.map(o => {
+        if (o.id === orderId) {
+          const updatedTotal = o.subtotal + validFee;
+          return {
+            ...o,
+            delivery_fee: validFee,
+            delivery_fee_status: 'quoted',
+            total: updatedTotal,
+            updated_at: new Date().toISOString(),
+          };
+        }
+        return o;
+      })
+    );
+    showToast(`Delivery fee set to KSh ${validFee.toLocaleString()}`);
+  };
+
   const updateBusinessSubscription = (
     businessId: string,
     planId: string,
@@ -768,13 +1162,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUser,
         login,
         register,
+        loginWithPassword,
+        registerWithPassword,
         logout,
         isAuthModalOpen,
         setIsAuthModalOpen,
         authModalTab,
         setAuthModalTab,
+        authModalMode,
+        setAuthModalMode,
         openAuthModal,
         closeAuthModal,
+        isSupabaseConfigured,
         currentRoute,
         activeShopSlug,
         navigateTo,
@@ -806,6 +1205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createOrder,
         processPaymentWebhook,
         updateOrderStatus,
+        updateOrderDeliveryFee,
         customers,
         plans,
         updateBusinessSubscription,

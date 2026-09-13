@@ -17,6 +17,10 @@ import {
   ShieldCheck,
   ExternalLink,
   QrCode,
+  Building2,
+  Store,
+  Smartphone,
+  CreditCard,
 } from 'lucide-react';
 import { Product } from '../types';
 import { ShopLinkModal } from './ShopLinkModal';
@@ -162,12 +166,48 @@ export const ShopView: React.FC = () => {
                 <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-neutral-500">
                   <span className="flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                    {currentShop.location}
+                    <span className="font-semibold text-neutral-700">
+                      {currentShop.county ? `${currentShop.county} County` : ''}
+                    </span>
+                    {currentShop.exact_location ? (
+                      <span>&bull; {currentShop.exact_location}</span>
+                    ) : (
+                      <span>{currentShop.location}</span>
+                    )}
                   </span>
                   <span className="flex items-center gap-1">
                     <Truck className="w-3.5 h-3.5 text-emerald-600" />
                     Delivery: KSh {currentShop.delivery_fee.toLocaleString()}
                   </span>
+                </div>
+
+                {/* Visual Payment Methods Accepted Badges */}
+                <div className="mt-3 pt-2.5 border-t border-neutral-100 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-neutral-600 mr-1">Accepts:</span>
+                  {(currentShop.settlement?.enabled_methods?.includes('till') ||
+                    currentShop.settlement?.till_number ||
+                    currentShop.settlement?.settlement_type === 'till') && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-medium">
+                      <Store className="w-3 h-3 text-emerald-600" />
+                      <span>Till {currentShop.settlement?.till_number ? `(${currentShop.settlement.till_number})` : ''}</span>
+                    </span>
+                  )}
+                  {(currentShop.settlement?.enabled_methods?.includes('paybill') ||
+                    currentShop.settlement?.paybill_number ||
+                    currentShop.settlement?.settlement_type === 'paybill') && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 text-[11px] font-medium">
+                      <Building2 className="w-3 h-3 text-blue-600" />
+                      <span>Paybill {currentShop.settlement?.paybill_number ? `(${currentShop.settlement.paybill_number})` : ''}</span>
+                    </span>
+                  )}
+                  {(currentShop.settlement?.enabled_methods?.includes('pochi') ||
+                    currentShop.settlement?.pochi_phone ||
+                    currentShop.settlement?.settlement_type === 'pochi') && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 text-[11px] font-medium">
+                      <Smartphone className="w-3 h-3 text-amber-600" />
+                      <span>Pochi {currentShop.settlement?.pochi_phone ? `(${currentShop.settlement.pochi_phone})` : ''}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

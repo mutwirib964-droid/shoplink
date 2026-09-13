@@ -15,17 +15,24 @@ export interface UserProfile {
   created_at: string;
 }
 
-export type SettlementType = 'till' | 'paybill' | 'pochi' | 'hashback_split';
+export type SettlementType = 'till' | 'paybill' | 'pochi' | 'hashback_split' | 'multiple';
+
+export type PaymentMethodChoice = 'till' | 'paybill' | 'pochi';
 
 export interface BusinessSettlementConfig {
   settlement_type: SettlementType;
+  // Multiple enabled payment methods selected by the seller
+  enabled_methods?: PaymentMethodChoice[];
   // Safaricom Buy Goods Till
   till_number?: string;
   store_name?: string;
   // Safaricom Paybill
   paybill_number?: string;
+  paybill_account_number?: string;
   account_number_format?: string;
   // Pochi la Biashara or direct M-Pesa phone
+  pochi_phone?: string;
+  pochi_name?: string;
   mpesa_phone?: string;
   // Hashback Sub-Account ID for automated merchant split
   hashback_subaccount_id?: string;
@@ -44,6 +51,8 @@ export interface Business {
   phone: string;
   email: string;
   location: string;
+  county?: string;
+  exact_location?: string;
   category: string;
   logo_url: string;
   banner_url?: string;
@@ -51,6 +60,7 @@ export interface Business {
   is_featured: boolean;
   subscription_plan_id: string;
   created_at: string;
+  trial_ends_at?: string; // 30-day free trial ending timestamp
   delivery_fee: number;
   currency: string;
   settlement?: BusinessSettlementConfig;
@@ -66,6 +76,7 @@ export interface Product {
   stock_quantity: number;
   category: string;
   image_url: string;
+  images?: string[];
   is_active: boolean;
   is_featured: boolean;
   created_at: string;
@@ -104,6 +115,8 @@ export interface Order {
   mpesa_phone: string;
   items: OrderItem[];
   subtotal: number;
+  delivery_type?: 'delivery' | 'pickup';
+  delivery_fee_status?: 'pending_quote' | 'quoted' | 'free_pickup';
   delivery_fee: number;
   total: number;
   currency: string;
