@@ -16,6 +16,7 @@ import {
   Check,
   CreditCard,
   PhoneCall,
+  Lock,
 } from 'lucide-react';
 import { Order } from '../types';
 import { buildWhatsAppUrl } from '../lib/assistanceConfig';
@@ -33,6 +34,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
     processPaymentWebhook,
     navigateTo,
     user,
+    setIsAuthModalOpen,
     showToast,
   } = useApp();
 
@@ -78,6 +80,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
   const handleInitiatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+
+    if (!user) {
+      setErrorMessage('You must create an account or sign in to place an order.');
+      setIsAuthModalOpen(true);
+      return;
+    }
 
     // Validate Kenyan phone numbers
     const cleanPhone = mpesaPhone.replace(/\s+/g, '');
@@ -156,7 +164,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+    <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-neutral-200 overflow-hidden my-8 animate-in fade-in zoom-in-95">
         {/* Modal Header */}
         <div className="px-5 py-4 border-b border-neutral-200 flex items-center justify-between bg-neutral-50">
@@ -188,12 +196,48 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
 
         {/* Modal Body */}
         <div className="p-5">
-          {errorMessage && (
-            <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
+          {!user ? (
+            <div className="py-6 px-4 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 mx-auto flex items-center justify-center">
+                <Store className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-base font-bold text-neutral-900">
+                  Account Required to Place Order
+                </h4>
+                <p className="text-xs text-neutral-600 max-w-sm mx-auto">
+                  You can explore shops and add items to your cart anytime, but you must create an account or sign in before placing an order or making a payment.
+                </p>
+              </div>
+
+              <div className="pt-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    setIsAuthModalOpen(true);
+                  }}
+                  className="w-full py-3 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-600/20"
+                >
+                  Create Account / Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full py-2.5 rounded-xl border border-neutral-200 text-neutral-600 text-xs font-semibold hover:bg-neutral-50"
+                >
+                  Continue Browsing
+                </button>
+              </div>
             </div>
-          )}
+          ) : (
+            <>
+              {errorMessage && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
 
           {/* STAGE 1: CHECKOUT FORM */}
           {stage === 'form' && (
@@ -368,9 +412,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
                   <p className="text-xs font-bold text-neutral-900 uppercase tracking-wider">
                     3. Select How You Want to Pay
                   </p>
-                  <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                    Direct to {currentShop?.name}
+                  <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>Direct to {currentShop?.name}</span>
                   </span>
+                </div>
+
+                {/* Explicit Buyer Notice: Merchant Payment Info is Locked */}
+                <div className="p-3 rounded-xl bg-neutral-100 border border-neutral-200 text-neutral-700 text-xs flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 text-neutral-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-neutral-900">
+                      Verified Merchant Payment Account (Locked)
+                    </p>
+                    <p className="text-[11px] text-neutral-600 mt-0.5 leading-relaxed">
+                      Payment credentials (Till, Paybill, and Pochi) are strictly managed by the store owner in their Seller Dashboard. Buyers cannot edit or redirect merchant payment details.
+                    </p>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
@@ -483,6 +541,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
 
                 {selectedChannel === 'till' && (
                   <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-2.5">
+                    <div className="flex items-center justify-between pb-2 border-b border-emerald-200">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-950">
+                        <Lock className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Merchant Till Number (Locked)</span>
+                      </div>
+                      <span className="text-[10px] text-emerald-800 bg-white border border-emerald-300 font-semibold px-2 py-0.5 rounded-full">
+                        Set by Seller &bull; Read-only
+                      </span>
+                    </div>
+
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-emerald-950">Buy Goods Till Number:</span>
                       <button
@@ -502,7 +570,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
                     </p>
                     <div>
                       <label className="block text-[11px] font-bold text-neutral-700 mb-1">
-                        M-Pesa Confirmation Code (Optional or auto-verified)
+                        Your M-Pesa Confirmation Code (Optional &mdash; from your Safaricom SMS)
                       </label>
                       <input
                         type="text"
@@ -517,6 +585,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
 
                 {selectedChannel === 'paybill' && (
                   <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 space-y-2.5">
+                    <div className="flex items-center justify-between pb-2 border-b border-blue-200">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-blue-950">
+                        <Lock className="w-3.5 h-3.5 text-blue-700" />
+                        <span>Merchant Paybill & Account (Locked)</span>
+                      </div>
+                      <span className="text-[10px] text-blue-800 bg-white border border-blue-300 font-semibold px-2 py-0.5 rounded-full">
+                        Set by Seller &bull; Read-only
+                      </span>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-2">
                       <div className="p-2.5 rounded-xl bg-white border border-blue-200">
                         <span className="text-[10px] text-blue-700 font-bold block">Business No:</span>
@@ -559,7 +637,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
 
                     <div>
                       <label className="block text-[11px] font-bold text-neutral-700 mb-1">
-                        M-Pesa Confirmation Code (Optional)
+                        Your M-Pesa Confirmation Code (Optional &mdash; from your Safaricom SMS)
                       </label>
                       <input
                         type="text"
@@ -574,6 +652,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
 
                 {selectedChannel === 'pochi' && (
                   <div className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 space-y-2.5">
+                    <div className="flex items-center justify-between pb-2 border-b border-amber-200">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                        <Lock className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Merchant Pochi Line (Locked)</span>
+                      </div>
+                      <span className="text-[10px] text-amber-800 bg-white border border-amber-300 font-semibold px-2 py-0.5 rounded-full">
+                        Set by Seller &bull; Read-only
+                      </span>
+                    </div>
+
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-amber-950">Pochi la Biashara Mobile Line:</span>
                       <button
@@ -596,7 +684,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
 
                     <div>
                       <label className="block text-[11px] font-bold text-neutral-700 mb-1">
-                        M-Pesa Confirmation Code (Optional)
+                        Your M-Pesa Confirmation Code (Optional &mdash; from your Safaricom SMS)
                       </label>
                       <input
                         type="text"
@@ -821,6 +909,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({ onClose }) => {
                 </button>
               </div>
             </div>
+          )}
+            </>
           )}
         </div>
       </div>

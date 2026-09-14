@@ -9,6 +9,8 @@ import {
   ArrowRight,
   ShieldCheck,
   Truck,
+  Lock,
+  UserCheck,
 } from 'lucide-react';
 import { CheckoutModal } from './CheckoutModal';
 
@@ -24,6 +26,8 @@ export const CartDrawer: React.FC = () => {
     cartDeliveryFee,
     cartTotal,
     currentShop,
+    user,
+    setIsAuthModalOpen,
   } = useApp();
 
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -32,7 +36,7 @@ export const CartDrawer: React.FC = () => {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 overflow-hidden">
+      <div className="fixed inset-0 z-60 overflow-hidden">
         {/* Backdrop */}
         <div
           onClick={() => setIsCartOpen(false)}
@@ -193,13 +197,31 @@ export const CartDrawer: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setIsCheckoutOpen(true)}
-                  className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2"
-                >
-                  <span>Proceed to Checkout</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                {user ? (
+                  <button
+                    onClick={() => setIsCheckoutOpen(true)}
+                    className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2"
+                  >
+                    <span>Proceed to Checkout</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => {
+                        setIsCartOpen(false);
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 transition-colors shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Create Account to Place Order</span>
+                    </button>
+                    <p className="text-[11px] text-center text-neutral-500">
+                      Explore and build your cart freely. You must create an account or sign in before placing an order.
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-center gap-1.5 text-[11px] text-neutral-500 pt-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />

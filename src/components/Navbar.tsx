@@ -18,6 +18,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { ASSISTANCE_CONFIG, buildWhatsAppUrl } from '../lib/assistanceConfig';
+import { isAuthorizedSuperAdmin } from '../lib/adminAuth';
 
 export const Navbar: React.FC = () => {
   const {
@@ -30,6 +31,8 @@ export const Navbar: React.FC = () => {
     setIsCartOpen,
     myBusiness,
   } = useApp();
+
+  const isSuperAdmin = isAuthorizedSuperAdmin(user);
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -105,16 +108,19 @@ export const Navbar: React.FC = () => {
               >
                 Explore Shops
               </button>
-              <button
-                onClick={() => navigateTo('shop', 'john-shoes')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  currentRoute === 'shop'
-                    ? 'text-emerald-700 bg-emerald-50 font-bold'
-                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
-                }`}
-              >
-                Demo Store
-              </button>
+              {/* Demo Store: Only for general visitors and shoppers, not platform superadmin */}
+              {!isSuperAdmin && (
+                <button
+                  onClick={() => navigateTo('shop', 'john-shoes')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    currentRoute === 'shop'
+                      ? 'text-emerald-700 bg-emerald-50 font-bold'
+                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100'
+                  }`}
+                >
+                  Demo Store
+                </button>
+              )}
 
               {/* Conditional routes based solely on authenticated profile */}
               {user?.role === 'business_owner' && (
@@ -131,7 +137,8 @@ export const Navbar: React.FC = () => {
                 </button>
               )}
 
-              {user?.role === 'customer' && (
+              {/* Customer orders: Never shown to SuperAdmin */}
+              {!isSuperAdmin && user?.role === 'customer' && (
                 <button
                   onClick={() => navigateTo('customer-orders')}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
@@ -145,7 +152,7 @@ export const Navbar: React.FC = () => {
                 </button>
               )}
 
-              {user?.role === 'admin' && (
+              {isSuperAdmin && (
                 <button
                   onClick={() => navigateTo('admin')}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
@@ -155,7 +162,7 @@ export const Navbar: React.FC = () => {
                   }`}
                 >
                   <ShieldCheck className="w-4 h-4 text-purple-600" />
-                  <span>Admin Panel</span>
+                  <span>SuperAdmin Console</span>
                 </button>
               )}
             </nav>
@@ -175,19 +182,21 @@ export const Navbar: React.FC = () => {
               <span>WhatsApp Support</span>
             </a>
 
-            {/* Shopping Cart Button */}
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="relative p-2 rounded-xl text-neutral-700 hover:bg-neutral-100 transition-colors"
-              title="Shopping Cart"
-            >
-              <ShoppingBag className="w-5 h-5" />
-              {cartItemCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-600 text-white text-[11px] font-bold rounded-full flex items-center justify-center shadow-xs">
-                  {cartItemCount}
-                </span>
-              )}
-            </button>
+            {/* Shopping Cart Button - hidden for SuperAdmin */}
+            {!isSuperAdmin && (
+              <button
+                onClick={() => setIsCartOpen(true)}
+                className="relative p-2 rounded-xl text-neutral-700 hover:bg-neutral-100 transition-colors"
+                title="Shopping Cart"
+              >
+                <ShoppingBag className="w-5 h-5" />
+                {cartItemCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-600 text-white text-[11px] font-bold rounded-full flex items-center justify-center shadow-xs">
+                    {cartItemCount}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* User Profile / Auth State */}
             {user ? (
@@ -198,7 +207,7 @@ export const Navbar: React.FC = () => {
                 >
                   <div
                     className={`w-7 h-7 rounded-lg text-white font-black text-xs flex items-center justify-center ${
-                      user.role === 'admin'
+                      isSuperAdmin
                         ? 'bg-purple-700'
                         : user.role === 'business_owner'
                         ? 'bg-emerald-600'
@@ -212,11 +221,11 @@ export const Navbar: React.FC = () => {
                       {user.full_name}
                     </p>
                     <p className="text-[10px] text-neutral-500 font-medium capitalize">
-                      {user.role === 'business_owner'
+                      {isSuperAdmin
+                        ? 'SuperAdmin'
+                        : user.role === 'business_owner'
                         ? 'Shop Owner'
-                        : user.role === 'customer'
-                        ? 'Shopper'
-                        : 'Administrator'}
+                        : 'Shopper'}
                     </p>
                   </div>
                   <ChevronDown className="w-3.5 h-3.5 text-neutral-400 ml-0.5" />
@@ -233,22 +242,22 @@ export const Navbar: React.FC = () => {
                         {user.email || user.phone}
                       </p>
                       <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border capitalize">
-                        {user.role === 'business_owner' && (
+                        {user.role === 'business_owner' && !isSuperAdmin && (
                           <span className="bg-emerald-50 text-emerald-800 border-emerald-200 flex items-center gap-1">
                             <Store className="w-3 h-3 text-emerald-600" />
                             <span>Store Owner</span>
                           </span>
                         )}
-                        {user.role === 'customer' && (
+                        {user.role === 'customer' && !isSuperAdmin && (
                           <span className="bg-blue-50 text-blue-800 border-blue-200 flex items-center gap-1">
                             <ShoppingBag className="w-3 h-3 text-blue-600" />
                             <span>Shopper</span>
                           </span>
                         )}
-                        {user.role === 'admin' && (
+                        {isSuperAdmin && (
                           <span className="bg-purple-50 text-purple-800 border-purple-200 flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3 text-purple-600" />
-                            <span>Platform Admin</span>
+                            <span>Platform SuperAdmin</span>
                           </span>
                         )}
                       </div>
@@ -281,7 +290,7 @@ export const Navbar: React.FC = () => {
                         </>
                       )}
 
-                      {user.role === 'customer' && (
+                      {user.role === 'customer' && !isSuperAdmin && (
                         <>
                           <button
                             onClick={() => {
@@ -306,7 +315,7 @@ export const Navbar: React.FC = () => {
                         </>
                       )}
 
-                      {user.role === 'admin' && (
+                      {isSuperAdmin && (
                         <button
                           onClick={() => {
                             navigateTo('admin');
@@ -315,7 +324,7 @@ export const Navbar: React.FC = () => {
                           className="w-full text-left px-4 py-2 text-xs text-purple-700 hover:bg-purple-50 flex items-center gap-2.5 font-bold"
                         >
                           <ShieldCheck className="w-4 h-4 text-purple-600" />
-                          <span>Admin Control Console</span>
+                          <span>SuperAdmin Console</span>
                         </button>
                       )}
                     </div>
@@ -355,8 +364,16 @@ export const Navbar: React.FC = () => {
               </div>
             )}
 
-            {/* Role-adaptive CTA: Business owners see Dashboard, Shoppers see My Orders, Visitors see Explore Shops */}
-            {user?.role === 'business_owner' ? (
+            {/* Role-adaptive CTA: SuperAdmin sees SuperAdmin Console, Business owners see Dashboard, Shoppers see My Orders, Visitors see Explore Shops */}
+            {isSuperAdmin ? (
+              <button
+                onClick={() => navigateTo('admin')}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-700 text-white text-xs font-bold hover:bg-purple-800 transition-colors shadow-xs"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>SuperAdmin Console</span>
+              </button>
+            ) : user?.role === 'business_owner' ? (
               <button
                 onClick={() => navigateTo('dashboard')}
                 className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shadow-xs"
@@ -460,15 +477,17 @@ export const Navbar: React.FC = () => {
             >
               Explore Kenyan Shops
             </button>
-            <button
-              onClick={() => {
-                navigateTo('shop', 'john-shoes');
-                setMobileMenuOpen(false);
-              }}
-              className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-neutral-700 hover:bg-neutral-100"
-            >
-              Demo Store (John&apos;s Shoes)
-            </button>
+            {!isSuperAdmin && (
+              <button
+                onClick={() => {
+                  navigateTo('shop', 'john-shoes');
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-neutral-700 hover:bg-neutral-100"
+              >
+                Demo Store (John&apos;s Shoes)
+              </button>
+            )}
 
             {user?.role === 'business_owner' && (
               <button
@@ -483,7 +502,7 @@ export const Navbar: React.FC = () => {
               </button>
             )}
 
-            {user?.role === 'customer' && (
+            {!isSuperAdmin && user?.role === 'customer' && (
               <button
                 onClick={() => {
                   navigateTo('customer-orders');
@@ -496,7 +515,7 @@ export const Navbar: React.FC = () => {
               </button>
             )}
 
-            {user?.role === 'admin' && (
+            {isSuperAdmin && (
               <button
                 onClick={() => {
                   navigateTo('admin');
@@ -505,7 +524,7 @@ export const Navbar: React.FC = () => {
                 className="w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-purple-700 bg-purple-50 flex items-center gap-2"
               >
                 <ShieldCheck className="w-4 h-4 text-purple-600" />
-                <span>Platform Admin Console</span>
+                <span>SuperAdmin Console</span>
               </button>
             )}
           </div>

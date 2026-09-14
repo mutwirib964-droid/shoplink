@@ -19,6 +19,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { ASSISTANCE_CONFIG, buildWhatsAppUrl, buildTelUrl } from '../lib/assistanceConfig';
+import { useApp } from '../context/AppContext';
 
 interface ChatMessage {
   id: string;
@@ -29,6 +30,7 @@ interface ChatMessage {
 }
 
 export const WhatsAppAssistanceWidget: React.FC = () => {
+  const { isCartOpen, isAuthModalOpen } = useApp();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'whatsapp' | 'ai'>('whatsapp');
   
@@ -136,8 +138,14 @@ export const WhatsAppAssistanceWidget: React.FC = () => {
 
   const activeWhatsAppUrl = buildWhatsAppUrl(customMessage);
 
+  // When the shopping cart drawer or authentication modal is open, suppress the floating widget
+  // so it never obstructs or covers checkout, payment, or authentication buttons
+  if (isCartOpen || isAuthModalOpen) {
+    return null;
+  }
+
   return (
-    <div className="fixed bottom-5 right-5 z-50 font-sans print:hidden">
+    <div className="fixed bottom-5 right-5 z-40 font-sans print:hidden">
       {/* ================================================================= */}
       {/* FLOATING TRIGGER BUTTON (When collapsed)                          */}
       {/* ================================================================= */}

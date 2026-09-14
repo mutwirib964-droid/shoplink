@@ -17,19 +17,10 @@ import {
   Check,
 } from 'lucide-react';
 import { KENYA_COUNTIES, KenyaCounty } from '../data/counties';
+import { KENYA_MARKETPLACE_CATEGORIES } from '../data/categories';
 import { PaymentMethodChoice } from '../types';
 
-const CATEGORIES = [
-  'Shoes & Footwear',
-  'Clothing & Fashion',
-  'Electronics & Phones',
-  'Beauty & Skincare',
-  'Groceries & Fresh Food',
-  'Home & Kitchen',
-  'Jewelry & Watches',
-  'Health & Wellness',
-  'General Merchandise',
-];
+const CATEGORIES = KENYA_MARKETPLACE_CATEGORIES.map(c => c.name);
 
 const PRESET_LOGOS = [
   { label: 'Shoes / Leather', url: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=200&auto=format&fit=crop&q=80' },

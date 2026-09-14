@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import {
   ShieldAlert,
+  ShieldCheck,
   Building2,
   Package,
   ShoppingBag,
@@ -14,7 +15,10 @@ import {
   TrendingUp,
   DollarSign,
   ExternalLink,
+  KeyRound,
+  Lock,
 } from 'lucide-react';
+import { isAuthorizedSuperAdmin, SUPERADMIN_IDENTITY } from '../lib/adminAuth';
 
 export const AdminPanel: React.FC = () => {
   const {
@@ -32,30 +36,50 @@ export const AdminPanel: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'businesses' | 'products' | 'orders' | 'transactions' | 'plans'>('businesses');
   const [searchFilter, setSearchFilter] = useState('');
 
-  // Protect Admin Route: Directed only if user profile is admin
-  if (user?.role !== 'admin') {
+  // Protect Admin Route: Exclusively authorized for SuperAdmin Brian Mutwiri (UID verification)
+  const isSuperAdmin = isAuthorizedSuperAdmin(user);
+  if (!isSuperAdmin) {
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
-        <div className="bg-white max-w-md w-full rounded-2xl border border-neutral-200 p-8 text-center shadow-xs">
-          <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center mx-auto mb-4">
-            <ShieldAlert className="w-6 h-6" />
+        <div className="bg-white max-w-lg w-full rounded-3xl border border-neutral-200 p-8 text-center shadow-xs">
+          <div className="w-14 h-14 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center mx-auto mb-4 border border-red-200">
+            <Lock className="w-7 h-7" />
           </div>
-          <h2 className="text-lg font-bold text-neutral-900">Restricted Administration</h2>
-          <p className="text-xs text-neutral-600 mt-2">
-            The Platform SuperAdmin Console is strictly reserved for authorized ShopLink Kenya system administrators.
+          <h2 className="text-xl font-bold text-neutral-900">Restricted Administration</h2>
+          <p className="text-xs text-neutral-600 mt-2.5 leading-relaxed">
+            The ShopLink Kenya SuperAdmin Console is strictly reserved for the verified platform owner. Access requires cryptographic authentication of the designated SuperAdmin UID.
           </p>
-          <div className="mt-6 flex flex-col gap-2.5">
+
+          <div className="mt-5 p-3.5 rounded-2xl bg-neutral-50 border border-neutral-200 text-left space-y-1.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500 font-medium">Designated Administrator:</span>
+              <span className="font-bold text-neutral-900">{SUPERADMIN_IDENTITY.FULL_NAME}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500 font-medium">Authorized Email:</span>
+              <span className="font-mono text-[11px] text-neutral-700">{SUPERADMIN_IDENTITY.EMAIL}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500 font-medium">Cryptographic UID:</span>
+              <span className="font-mono text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                {SUPERADMIN_IDENTITY.UID}
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
             <button
               onClick={() => openAuthModal('admin')}
-              className="w-full py-2.5 bg-purple-700 text-white rounded-xl text-xs font-bold hover:bg-purple-800 transition-colors"
+              className="flex-1 py-2.5 bg-purple-700 text-white rounded-xl text-xs font-bold hover:bg-purple-800 transition-colors flex items-center justify-center gap-2"
             >
-              Sign In as Administrator
+              <KeyRound className="w-4 h-4" />
+              <span>Sign In as SuperAdmin</span>
             </button>
             <button
-              onClick={() => navigateTo('landing')}
-              className="w-full py-2.5 bg-white border border-neutral-200 text-neutral-700 rounded-xl text-xs font-bold hover:bg-neutral-50 transition-colors"
+              onClick={() => navigateTo('marketplace')}
+              className="flex-1 py-2.5 bg-white border border-neutral-200 text-neutral-700 rounded-xl text-xs font-bold hover:bg-neutral-50 transition-colors"
             >
-              Return to Homepage
+              Return to Marketplace
             </button>
           </div>
         </div>
@@ -77,19 +101,20 @@ export const AdminPanel: React.FC = () => {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Admin Header */}
         <div className="bg-neutral-900 text-white rounded-2xl p-6 shadow-md border border-neutral-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 flex items-center justify-center">
-              <ShieldAlert className="w-5 h-5" />
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
+              <ShieldCheck className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl font-bold">Platform SuperAdmin</h1>
-                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 text-[10px] font-bold border border-red-500/30">
-                  SYSTEM LEVEL
+                <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/30 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-purple-400" />
+                  <span>UID VERIFIED: {user?.id}</span>
                 </span>
               </div>
-              <p className="text-xs text-neutral-400">
-                ShopLink Kenya SaaS Oversight, Merchant Auditing & Settlement Tracking
+              <p className="text-xs text-neutral-300 mt-1">
+                Welcome, <strong className="text-white">{SUPERADMIN_IDENTITY.FULL_NAME}</strong> ({SUPERADMIN_IDENTITY.EMAIL}) — Sole Authorized Administrator
               </p>
             </div>
           </div>

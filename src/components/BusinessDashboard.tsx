@@ -35,6 +35,7 @@ import {
   Building2,
   Smartphone,
   PhoneCall,
+  Lock,
 } from 'lucide-react';
 import { OrderStatus, Product, SubscriptionPlan, SettlementType, PaymentMethodChoice } from '../types';
 import { KENYA_COUNTIES } from '../data/counties';
@@ -1573,6 +1574,19 @@ export const BusinessDashboard: React.FC = () => {
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>Direct Crediting Active</span>
                 </span>
+              </div>
+
+              {/* Exclusive Merchant Control Banner */}
+              <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-950 text-xs flex items-start gap-2.5">
+                <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-900">
+                    Exclusive Merchant Control
+                  </p>
+                  <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                    Only you as the authenticated seller can configure or change your shop&apos;s payment methods, Till number, Paybill, and Pochi details here. Shoppers on your store only receive locked, read-only payment credentials.
+                  </p>
+                </div>
               </div>
 
               <form onSubmit={handleSaveSettlement} className="space-y-6">

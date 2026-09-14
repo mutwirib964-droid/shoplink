@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Product, Business } from '../types';
 import { KENYA_COUNTIES } from '../data/counties';
+import { KENYA_MARKETPLACE_CATEGORIES, ALL_KENYAN_CATEGORY_NAMES } from '../data/categories';
 
 export const Marketplace: React.FC = () => {
   const { businesses, products, navigateTo, addToCart, setIsCartOpen, showToast } = useApp();
@@ -27,14 +28,28 @@ export const Marketplace: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedCounty, setSelectedCounty] = useState('All');
 
+  // Complete list of Kenyan categories including all official ones plus any custom ones from db
   const categories = useMemo(() => {
-    const set = new Set<string>();
-    businesses.forEach(b => set.add(b.category));
-    products.forEach(p => {
-      if (p.category) set.add(p.category);
+    const list = ['All', ...ALL_KENYAN_CATEGORY_NAMES];
+    businesses.forEach(b => {
+      if (b.category && !list.includes(b.category)) list.push(b.category);
     });
-    return ['All', ...Array.from(set)];
+    products.forEach(p => {
+      if (p.category && !list.includes(p.category)) list.push(p.category);
+    });
+    return list;
   }, [businesses, products]);
+
+  // Keyword-to-Category intelligence for rich Kenyan searches (e.g. sneakers, boda, diapers, fertilizer, wigs)
+  const matchingCategoryNames = useMemo(() => {
+    if (!search.trim()) return [];
+    const q = search.toLowerCase().trim();
+    return KENYA_MARKETPLACE_CATEGORIES.filter(cat =>
+      cat.popularKeywords.some(k => k.toLowerCase().includes(q) || q.includes(k.toLowerCase())) ||
+      cat.name.toLowerCase().includes(q) ||
+      cat.description.toLowerCase().includes(q)
+    ).map(c => c.name.toLowerCase());
+  }, [search]);
 
   // Filter businesses by search, exact location, category, and all 47 counties
   const filteredBusinesses = useMemo(() => {
@@ -44,14 +59,16 @@ export const Marketplace: React.FC = () => {
       const bCounty = (b.county || '').toLowerCase();
       const bName = (b.name || '').toLowerCase();
       const bDesc = (b.description || '').toLowerCase();
+      const bCat = (b.category || '').toLowerCase();
 
-      // General Search Query (name, description, or location)
+      // General Search Query (name, description, location, or matching Kenyan category keywords)
       const matchesSearch =
         !search ||
         bName.includes(search.toLowerCase()) ||
         bDesc.includes(search.toLowerCase()) ||
         bLocation.includes(search.toLowerCase()) ||
-        bExact.includes(search.toLowerCase());
+        bExact.includes(search.toLowerCase()) ||
+        matchingCategoryNames.some(mCat => bCat.includes(mCat) || mCat.includes(bCat));
 
       // Exact Location Search Query (e.g. "Imenti House", "Westlands", "Diani", "Kenyatta Ave")
       const matchesExactLocation =
@@ -61,7 +78,9 @@ export const Marketplace: React.FC = () => {
         bCounty.includes(exactLocationSearch.toLowerCase());
 
       // Category filter
-      const matchesCategory = selectedCategory === 'All' || b.category === selectedCategory;
+      const matchesCategory =
+        selectedCategory === 'All' ||
+        b.category.toLowerCase().trim() === selectedCategory.toLowerCase().trim();
 
       // 47 County Filter
       const matchesCounty =
@@ -71,7 +90,7 @@ export const Marketplace: React.FC = () => {
 
       return matchesSearch && matchesExactLocation && matchesCategory && matchesCounty;
     });
-  }, [businesses, search, exactLocationSearch, selectedCategory, selectedCounty]);
+  }, [businesses, search, exactLocationSearch, selectedCategory, selectedCounty, matchingCategoryNames]);
 
   // Filter products
   const filteredProducts = useMemo(() => {
@@ -82,10 +101,12 @@ export const Marketplace: React.FC = () => {
 
       const pName = (p.name || '').toLowerCase();
       const pDesc = (p.description || '').toLowerCase();
+      const pCat = (p.category || '').toLowerCase();
       const bLocation = (biz.location || '').toLowerCase();
       const bExact = (biz.exact_location || '').toLowerCase();
       const bCounty = (biz.county || '').toLowerCase();
       const bName = (biz.name || '').toLowerCase();
+      const bCat = (biz.category || '').toLowerCase();
 
       // General Search
       const matchesSearch =
@@ -93,7 +114,10 @@ export const Marketplace: React.FC = () => {
         pName.includes(search.toLowerCase()) ||
         pDesc.includes(search.toLowerCase()) ||
         bName.includes(search.toLowerCase()) ||
-        bLocation.includes(search.toLowerCase());
+        bLocation.includes(search.toLowerCase()) ||
+        matchingCategoryNames.some(mCat =>
+          pCat.includes(mCat) || mCat.includes(pCat) || bCat.includes(mCat) || mCat.includes(bCat)
+        );
 
       // Exact Location Search
       const matchesExactLocation =
@@ -105,8 +129,8 @@ export const Marketplace: React.FC = () => {
       // Category
       const matchesCategory =
         selectedCategory === 'All' ||
-        p.category === selectedCategory ||
-        biz.category === selectedCategory;
+        (p.category && p.category.toLowerCase().trim() === selectedCategory.toLowerCase().trim()) ||
+        biz.category.toLowerCase().trim() === selectedCategory.toLowerCase().trim();
 
       // 47 County
       const matchesCounty =
@@ -116,7 +140,7 @@ export const Marketplace: React.FC = () => {
 
       return matchesSearch && matchesExactLocation && matchesCategory && matchesCounty;
     });
-  }, [products, businesses, search, exactLocationSearch, selectedCategory, selectedCounty]);
+  }, [products, businesses, search, exactLocationSearch, selectedCategory, selectedCounty, matchingCategoryNames]);
 
   // Helper to render accepted payment method badges
   const renderPaymentBadges = (biz: Business) => {
@@ -287,6 +311,38 @@ export const Marketplace: React.FC = () => {
                 <span>Reset Filters</span>
               </button>
             )}
+          </div>
+
+          {/* Quick Kenyan Category Pills Row */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pt-2 border-t border-neutral-100 no-scrollbar py-1">
+            <span className="text-[11px] font-bold text-neutral-400 shrink-0 mr-1 flex items-center gap-1">
+              <ShoppingBag className="w-3 h-3 text-emerald-600" />
+              Categories:
+            </span>
+            <button
+              onClick={() => setSelectedCategory('All')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors shrink-0 ${
+                selectedCategory === 'All'
+                  ? 'bg-neutral-900 text-white'
+                  : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+              }`}
+            >
+              All Kenyan Items
+            </button>
+            {KENYA_MARKETPLACE_CATEGORIES.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.name)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors shrink-0 flex items-center gap-1.5 ${
+                  selectedCategory === cat.name
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                }`}
+                title={cat.description}
+              >
+                <span>{cat.name}</span>
+              </button>
+            ))}
           </div>
         </div>
 

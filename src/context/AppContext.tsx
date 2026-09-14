@@ -21,6 +21,7 @@ import {
   INITIAL_PLANS,
 } from '../data/mockData';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { SUPERADMIN_IDENTITY, isAuthorizedSuperAdmin } from '../lib/adminAuth';
 
 interface AppContextType {
   // Auth
@@ -184,7 +185,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
     if (saved) {
-      try { return JSON.parse(saved); } catch {}
+      try {
+        const parsed: Product[] = JSON.parse(saved);
+        // Correct any legacy cached watermelon mislabelled as honey
+        const corrected = parsed.map(p => {
+          if (p.id === 'prod-mwo-1' || p.image_url?.includes('photo-1587049352846')) {
+            return {
+              ...p,
+              name: 'Fresh Sweet Farm Watermelon (Whole & Sliced)',
+              description: 'Crisp, juicy red watermelon with thin rind and rich natural sweetness, freshly harvested from Kenyan soil. Sold as a whole melon (approx 5–7kg).',
+              price: 750,
+              sale_price: 600,
+              category: 'Groceries & Fresh Food',
+              image_url: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=600&auto=format&fit=crop&q=80',
+            };
+          }
+          return p;
+        });
+
+        // Ensure newly added demo items (such as the genuine honey jar and coast spices) are included
+        INITIAL_PRODUCTS.forEach(initP => {
+          if (!corrected.some(cp => cp.id === initP.id)) {
+            corrected.push(initP);
+          }
+        });
+
+        return corrected;
+      } catch {}
     }
     return INITIAL_PRODUCTS;
   });
@@ -299,15 +326,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             .eq('id', session.user.id)
             .maybeSingle();
 
-          if (profile) {
-            setUser({
-              id: profile.id,
-              email: profile.email,
-              full_name: profile.full_name,
-              phone: profile.phone || '',
-              role: profile.role,
-              created_at: profile.created_at,
-            });
+          const isSuperAdmin =
+            session.user.id.trim() === SUPERADMIN_IDENTITY.UID &&
+            session.user.email?.toLowerCase().trim() === SUPERADMIN_IDENTITY.EMAIL.toLowerCase();
+
+          const resolvedRole: UserRole = isSuperAdmin
+            ? 'admin'
+            : (profile?.role as UserRole) || 'customer';
+
+          const loadedUser: UserProfile = {
+            id: session.user.id,
+            email: session.user.email || profile?.email || '',
+            full_name: profile?.full_name || (isSuperAdmin ? SUPERADMIN_IDENTITY.FULL_NAME : session.user.user_metadata?.full_name || 'User'),
+            phone: profile?.phone || session.user.user_metadata?.phone || '',
+            role: resolvedRole,
+            created_at: session.user.created_at,
+          };
+
+          setUser(loadedUser);
+
+          // SuperAdmin Brian Mutwiri is always directed directly to the Admin Panel
+          if (isSuperAdmin) {
+            navigateTo('admin');
           }
         } catch (e) {
           console.warn('Supabase session load error:', e);
@@ -325,15 +365,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             .eq('id', session.user.id)
             .maybeSingle();
 
-          if (profile) {
-            setUser({
-              id: profile.id,
-              email: profile.email,
-              full_name: profile.full_name,
-              phone: profile.phone || '',
-              role: profile.role,
-              created_at: profile.created_at,
-            });
+          const isSuperAdmin =
+            session.user.id.trim() === SUPERADMIN_IDENTITY.UID &&
+            session.user.email?.toLowerCase().trim() === SUPERADMIN_IDENTITY.EMAIL.toLowerCase();
+
+          const resolvedRole: UserRole = isSuperAdmin
+            ? 'admin'
+            : (profile?.role as UserRole) || 'customer';
+
+          const loadedUser: UserProfile = {
+            id: session.user.id,
+            email: session.user.email || profile?.email || '',
+            full_name: profile?.full_name || (isSuperAdmin ? SUPERADMIN_IDENTITY.FULL_NAME : session.user.user_metadata?.full_name || 'User'),
+            phone: profile?.phone || session.user.user_metadata?.phone || '',
+            role: resolvedRole,
+            created_at: session.user.created_at,
+          };
+
+          setUser(loadedUser);
+
+          // SuperAdmin Brian Mutwiri is always directed directly to the Admin Panel
+          if (isSuperAdmin) {
+            navigateTo('admin');
           }
         } catch (e) {
           console.warn('Supabase profile listener error:', e);
@@ -454,22 +507,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             .eq('id', data.user.id)
             .maybeSingle();
 
+          const isSuperAdmin =
+            data.user.id.trim() === SUPERADMIN_IDENTITY.UID &&
+            data.user.email?.toLowerCase().trim() === SUPERADMIN_IDENTITY.EMAIL.toLowerCase();
+
+          // Reject if someone tries admin access but doesn't have Brian Mutwiri's UID and email
+          if (role === 'admin' && !isSuperAdmin) {
+            await supabase.auth.signOut().catch(() => {});
+            return {
+              success: false,
+              error: 'Access Denied: The Platform SuperAdmin Console is strictly reserved for Brian Mutwiri (UID: fdf58936-e070-4dde-84b7-07fee9503b8a). Other accounts are not permitted administrator privileges.',
+            };
+          }
+
+          const userRole: UserRole = isSuperAdmin
+            ? 'admin'
+            : (profile?.role as UserRole) || (data.user.user_metadata?.role as UserRole) || role;
+
           const loggedInUser: UserProfile = {
             id: data.user.id,
             email: data.user.email || email,
-            full_name: profile?.full_name || data.user.user_metadata?.full_name || email.split('@')[0],
+            full_name: profile?.full_name || (isSuperAdmin ? SUPERADMIN_IDENTITY.FULL_NAME : data.user.user_metadata?.full_name || email.split('@')[0]),
             phone: profile?.phone || data.user.user_metadata?.phone || '',
-            role: (profile?.role as UserRole) || (data.user.user_metadata?.role as UserRole) || role,
+            role: userRole,
             created_at: data.user.created_at,
           };
 
           setUser(loggedInUser);
-          showToast(`Welcome back, ${loggedInUser.full_name}!`);
 
-          if (redirect) {
-            if (loggedInUser.role === 'business_owner') navigateTo('dashboard');
-            else if (loggedInUser.role === 'admin') navigateTo('admin');
-            else navigateTo('customer-orders');
+          if (isSuperAdmin) {
+            showToast(`Welcome SuperAdmin Brian Mutwiri! Opening Admin Console.`);
+            navigateTo('admin');
+          } else {
+            showToast(`Welcome back, ${loggedInUser.full_name}!`);
+            if (redirect) {
+              if (loggedInUser.role === 'business_owner') navigateTo('dashboard');
+              else navigateTo('customer-orders');
+            }
           }
 
           return { success: true };
@@ -482,16 +556,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 2. Local Fallback Mode
     let matchedUser: UserProfile;
     if (role === 'admin') {
+      const isSuperAdmin = email.toLowerCase().trim() === SUPERADMIN_IDENTITY.EMAIL.toLowerCase();
+      if (!isSuperAdmin) {
+        return {
+          success: false,
+          error: 'Access Denied: The SuperAdmin Console is strictly restricted to Brian Mutwiri (mutwirib964@gmail.com).',
+        };
+      }
       matchedUser = {
-        id: 'admin-1',
-        email: email || 'admin@shoplink.co.ke',
-        full_name: 'Platform Administrator',
+        id: SUPERADMIN_IDENTITY.UID,
+        email: SUPERADMIN_IDENTITY.EMAIL,
+        full_name: SUPERADMIN_IDENTITY.FULL_NAME,
+        phone: SUPERADMIN_IDENTITY.PHONE,
         role: 'admin',
         created_at: new Date().toISOString(),
       };
       setUser(matchedUser);
-      showToast(`Signed in to Platform Admin Console`);
+      showToast(`Welcome SuperAdmin Brian Mutwiri! Directing to Admin Console.`);
       if (redirect) navigateTo('admin');
+      return { success: true };
     } else if (role === 'customer') {
       const shopperName = email.includes('@') ? email.split('@')[0] : email;
       matchedUser = {
@@ -533,6 +616,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     role: UserRole,
     password?: string
   ): Promise<{ success: boolean; user?: UserProfile; error?: string }> => {
+    // Admin role cannot be self-registered; SuperAdmin is exclusively designated
+    const safeRole: UserRole = role === 'admin' ? 'customer' : role;
+
     // 1. Try Supabase Auth first
     if (supabase && isSupabaseConfigured && password) {
       try {
@@ -543,16 +629,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             data: {
               full_name: name,
               phone,
-              role,
+              role: safeRole,
             },
           },
         });
 
         if (error) {
+          if (error.message?.toLowerCase().includes('already registered')) {
+            return { success: false, error: 'An account with this email address already exists. Please sign in instead.' };
+          }
           return { success: false, error: error.message };
         }
 
         if (data.user) {
+          // Detect if Supabase returned a user without identities (indicates duplicate account under email confirmation settings)
+          if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+            return {
+              success: false,
+              error: 'An account with this email address already exists. Please switch to Sign In.',
+            };
+          }
+
           const newUser: UserProfile = {
             id: data.user.id,
             email: data.user.email || email,
